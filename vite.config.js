@@ -8,14 +8,16 @@ const cspPlugin = () => ({
     server.middlewares.use((req, res, next) => {
       res.setHeader(
         'Content-Security-Policy',
-        // THAY ĐỔI: Thiết lập một chính sách bảo mật hoàn chỉnh hơn
+        // THAY ĐỔI: Bổ sung các nguồn của Google vào chính sách
         "default-src 'self'; " + // Mặc định chỉ cho phép từ chính trang web
         // Cho phép script từ trang, inline, eval, và các CDN đáng tin cậy
         "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://cdn.jsdelivr.net; " +
         // Cho phép style từ trang, inline, và CDN của flatpickr
         "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
-        // Cho phép kết nối API đến backend và kết nối WebSocket (ws:) cho Vite
-        "connect-src 'self' http://127.0.0.1:5001 ws:;"
+        // Cho phép kết nối API đến backend, Google Drive, và WebSocket cho Vite
+        "connect-src 'self' http://127.0.0.1:5001 https://www.googleapis.com ws:; " +
+        // Cho phép tải ảnh từ trang, blob data, và server ảnh của Google
+        "img-src 'self' data: https://lh3.googleusercontent.com;"
       );
       next();
     });
