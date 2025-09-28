@@ -15,5 +15,6 @@ sleep 5
 # Cờ --host là cần thiết để server của Vite có thể được truy cập từ bên ngoài container
 echo "Dang khoi dong service Frontend..."
 cd /app
-npm run dev -- --host
+npm run build && npx serve -s dist
+
 
