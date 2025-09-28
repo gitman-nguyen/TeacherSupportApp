@@ -25,7 +25,7 @@ from google.auth.transport import requests as google_requests
 app = Flask(__name__)
 
 # --- Cấu hình CORS và Database ---
-CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "https://teachersupportapp.onrender.com/"]}})
+CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "https://teachersupportapp.onrender.com"]}})
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your_default_secret_key')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
