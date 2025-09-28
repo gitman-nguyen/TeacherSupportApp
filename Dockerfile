@@ -42,7 +42,7 @@ COPY start.sh .
 RUN chmod +x ./start.sh
 
 # Mở các cổng cần thiết cho cả hai ứng dụng
-EXPOSE 5001 5173
+EXPOSE 5173
 
 # Lệnh để chạy script khởi động khi container bắt đầu
 CMD ["./start.sh"]
