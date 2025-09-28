@@ -1,0 +1,14 @@
+# Bỏ qua thư mục chứa các thư viện đã cài đặt
+# Chúng sẽ được cài đặt lại bên trong container
+node_modules
+
+# Các tệp log của npm
+npm-debug.log
+
+# Các tệp cấu hình của Docker, không cần đưa vào trong ảnh
+Dockerfile
+.dockerignore
+
+# Các tệp và thư mục liên quan đến Git
+.git
+.gitignore
