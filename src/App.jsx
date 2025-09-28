@@ -1,30 +1,27 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 // CÁC FILE CON: ĐÃ CẬP NHẬT ĐƯỜNG DẪN THEO CẤU TRÚC src/views/
-// Sửa lỗi Resolve: Quay lại dùng đường dẫn tương đối từ src/
 import LoginView from './views/Login/LoginView.jsx'; 
 import SettingsView from './views/Settings/SettingsView.jsx';
 import ScheduleView from './views/Schedule/ScheduleView.jsx';
 import OrganizerView from './views/Organizer/OrganizerView.jsx';
 import AdminView from './views/Admin/AdminView.jsx'; 
-// BỔ SUNG: Import thành phần PhotoGalleryView mới
 import PhotoGalleryView from './views/PhotoGallery/PhotoGalleryView.jsx';
 
 // Import các hàm và hằng số (src/utils/)
-import { BACKEND_URL } from './utils/constants.js'; 
+// THAY ĐỔI 1: Xóa bỏ BACKEND_URL vì không còn cần thiết
+// import { BACKEND_URL } from './utils/constants.js'; 
 import { calculateHammingDistance } from './utils/helpers.js'; 
 
 // --- Main App Component ---
 function App() {
   const [view, setView] = useState('schedule');
-  // Khởi tạo settings là một đối tượng rỗng để tránh lỗi Cannot read properties of null
   const [settings, setSettings] = useState({ client_id: '', api_key: '', source_folder_id: '' });
   const [recurringSchedule, setRecurringSchedule] = useState([]);
   const [oneOffSchedule, setOneOffSchedule] = useState([]);
   
   const [currentUser, setCurrentUser] = useState(null);
   const [isSettingsLoading, setIsSettingsLoading] = useState(true);
-  // [SỬA]: Thêm Access Token cho Google Drive (dùng trong Frontend)
   const [accessToken, setAccessToken] = useState(null); 
 
   const [timeField, setTimeField] = useState('exifTime');
@@ -37,7 +34,6 @@ function App() {
   const [progress, setProgress] = useState(0);
   const [origin, setOrigin] = useState('');
   const [concurrencyLevel, setConcurrencyLevel] = useState(5);
-  // [THÊM MỚI] State cho bộ phân tích ảnh client-side
   const [imageAnalyzer, setImageAnalyzer] = useState(null);
 
   const logContainerRef = useRef(null);
@@ -53,36 +49,30 @@ function App() {
     localStorage.removeItem('accessToken');
   }, [log]);
 
-  // Effect để khôi phục phiên đăng nhập khi tải lại trang
   useEffect(() => {
     const storedUser = localStorage.getItem('currentUser');
     const storedToken = localStorage.getItem('apiToken');
-    // BỔ SUNG: Khôi phục accessToken từ localStorage
     const storedAccessToken = localStorage.getItem('accessToken');
 
     if (storedUser && storedToken) {
         try {
             const user = JSON.parse(storedUser);
-            // Đảm bảo token trong user object cũng được cập nhật
             user.apiToken = storedToken; 
             setCurrentUser(user);
             log('Đã khôi phục phiên đăng nhập.', 'info');
-            // BỔ SUNG: Gán lại accessToken nếu có
             if (storedAccessToken) {
                 setAccessToken(storedAccessToken);
                 log('Đã khôi phục quyền truy cập Google Drive.', 'info');
             }
         } catch (e) {
             log('Lỗi khôi phục phiên, vui lòng đăng nhập lại.', 'error');
-            // BỔ SUNG: Xóa toàn bộ localStorage nếu có lỗi
             localStorage.clear();
         }
     }
   }, [log]);
 
-
+  // THAY ĐỔI 2: Cập nhật hàm fetchApiData để sử dụng đường dẫn tương đối qua proxy
   const fetchApiData = useCallback(async (endpoint, method = 'GET', body = null, token = null) => {
-    // Để cho phép fetch hoạt động trong môi trường sandbox, cần đảm bảo BACKEND_URL là hợp lệ.
     const headers = { 'Content-Type': 'application/json' };
     if (token) {
         headers['x-access-token'] = token;
@@ -92,23 +82,24 @@ function App() {
         options.body = JSON.stringify(body);
     }
     
-    // Thêm kiểm tra đơn giản cho BACKEND_URL để tránh lỗi không mong muốn
-    // [KHÔI PHỤC URL GỐC]
-    const url = BACKEND_URL || 'https://mock-backend-url.com/api'; 
+    // URL giờ đây là một đường dẫn tương đối, bắt đầu bằng /api.
+    // Vite Dev Server sẽ bắt lấy request này và proxy nó đến backend.
+    const url = `/api${endpoint}`;
     
-    const response = await fetch(`${url}${endpoint}`, options);
+    const response = await fetch(url, options);
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown server error' }));
         throw new Error(errorData.error || `Request failed with status ${response.status}`);
     }
-    return response.json();
+    // Xử lý trường hợp response có thể không có body
+    const text = await response.text();
+    return text ? JSON.parse(text) : {};
   }, []);
 
   useEffect(() => {
     const fetchInitialSettings = async () => {
         try {
             const settingsData = await fetchApiData('/settings');
-            // [SỬA]: Đảm bảo các trường luôn có giá trị mặc định nếu server trả về thiếu
             setSettings({
                 client_id: settingsData.client_id || '',
                 api_key: settingsData.api_key || '',
@@ -116,7 +107,6 @@ function App() {
             });
         } catch (error) {
             log(`Lỗi tải cài đặt: ${error.message}`, 'error');
-            // Cài đặt giá trị mặc định nếu tải thất bại
             setSettings({ client_id: '', api_key: '', source_folder_id: '' });
         } finally {
             setIsSettingsLoading(false);
@@ -125,7 +115,6 @@ function App() {
     fetchInitialSettings();
   }, [log, fetchApiData]);
   
-  // [SỬA MỚI]: Gửi Access Token Drive lên Backend để lưu vào DB
   const saveDriveAccessToken = useCallback(async (token, apiToken) => {
       if (!apiToken) {
           log('Lỗi: Thiếu API Token để xác thực với backend.', 'error');
@@ -133,15 +122,13 @@ function App() {
       }
       log('Đang lưu Access Token Drive vào hồ sơ người dùng...', 'info');
       try {
-          // Lưu ý: Endpoint này đã được thêm vào app.py
-          await fetchApiData('/api/save_drive_token', 'POST', { access_token: token }, apiToken);
+          await fetchApiData('/save_drive_token', 'POST', { access_token: token }, apiToken);
           log('Lưu Access Token Drive thành công.', 'success');
       } catch (error) {
           log(`Lỗi lưu Access Token Drive: ${error.message}`, 'error');
       }
   }, [log, fetchApiData]);
 
-  // [SỬA MỚI]: Yêu cầu Access Token Drive (OAuth)
   const requestDriveAccessToken = useCallback((userApiToken) => {
     if (!settings?.client_id) {
         log('Chưa có Client ID để kết nối Google Drive.', 'error');
@@ -152,31 +139,22 @@ function App() {
     try {
         const client = window.google.accounts.oauth2.initTokenClient({
             client_id: settings.client_id,
-            // BỔ SUNG: Đổi scope để có đủ quyền đọc thư mục và file
             scope: 'https://www.googleapis.com/auth/drive', 
             callback: (tokenResponse) => {
                 if (tokenResponse.error) {
                     log(`Lỗi lấy quyền truy cập Drive: ${tokenResponse.error}. Vui lòng thử lại.`, 'error');
                     setAccessToken(null);
-                    // BỔ SUNG: Xóa token cũ khỏi localStorage nếu có lỗi
                     localStorage.removeItem('accessToken');
                     return;
                 }
                 
-                // 1. Lưu token vào state Frontend
                 setAccessToken(tokenResponse.access_token);
-                // 2. BỔ SUNG: Lưu token vào localStorage để khôi phục
                 localStorage.setItem('accessToken', tokenResponse.access_token);
-                
-                // 3. Gửi token lên Backend để lưu vào DB
                 saveDriveAccessToken(tokenResponse.access_token, userApiToken);
-                
                 log('Đã có quyền truy cập Google Drive!', 'success');
             },
         });
         
-        // Yêu cầu cấp quyền: prompt 'consent'
-        // Lời gọi này KHÔNG được phép xảy ra sau hành động async (fetchApiData)
         client.requestAccessToken({ prompt: 'consent' }); 
 
     } catch (err) {
@@ -202,7 +180,6 @@ function App() {
             }
         };
         fetchSchedules();
-        // BỔ SUNG: Tự động xin quyền nếu chưa có accessToken
         if (!accessToken && currentUser.role !== 'Admin') {
             requestDriveAccessToken(currentUser.apiToken);
         }
@@ -228,7 +205,6 @@ function App() {
     };
   }, []);
 
-
   useEffect(() => { setOrigin(window.location.origin) }, []);
 
   useEffect(() => {
@@ -252,7 +228,6 @@ function App() {
         }
     } catch(error) {
         log(`Lỗi đăng nhập Admin: ${error.message}`, 'error');
-        // BỔ SUNG: Dùng clear() để đảm bảo dọn dẹp sạch sẽ
         localStorage.clear();
     }
   }, [log, fetchApiData]);
@@ -277,7 +252,6 @@ function App() {
     } catch (error) {
         log(`Lỗi đăng nhập Google: ${error.message}`, 'error');
         setCurrentUser(null);
-        // BỔ SUNG: Dùng clear() để đảm bảo dọn dẹp sạch sẽ
         localStorage.clear();
     }
   }, [log, fetchApiData]);
@@ -285,7 +259,6 @@ function App() {
   const handleLogout = () => {
       setCurrentUser(null);
       setAccessToken(null);
-      // BỔ SUNG: Dùng clear() để dọn dẹp toàn bộ session
       localStorage.clear();
       setView('schedule');
       log('Đã đăng xuất.', 'info');
@@ -331,8 +304,6 @@ function App() {
   
     const toYYYYMMDD = (date) => new Date(date).toISOString().split('T')[0];
     
-    // --- Bổ sung các hàm API cho Quản trị viên ---
-
     const getUsers = useCallback(async () => {
         if (!currentUser?.apiToken) throw new Error("Chưa xác thực hoặc thiếu token API.");
         return await fetchApiData('/users', 'GET', null, currentUser.apiToken);
@@ -353,10 +324,7 @@ function App() {
         return await fetchApiData(`/users/${userId}/role`, 'PUT', { role: newRole }, currentUser.apiToken);
     }, [currentUser?.apiToken, fetchApiData]);
 
-    // --- Kết thúc các hàm API cho Quản trị viên ---
-
     const organizePhotos = useCallback(async () => {
-      // [CẬP NHẬT] Kiểm tra bộ phân tích trước khi chạy
       if (!imageAnalyzer) {
           log('Lỗi: Bộ phân tích AI chưa sẵn sàng. Vui lòng đợi model tải xong rồi thử lại.', 'error');
           setIsProcessing(false);
@@ -411,7 +379,6 @@ function App() {
           return response.json();
       };
       
-      // [THÊM MỚI] Hàm tải file từ Drive dưới dạng Blob
       const downloadDriveFileAsBlob = async (fileId) => {
           const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
           const headers = { 'Authorization': `Bearer ${accessToken}` };
@@ -467,9 +434,9 @@ function App() {
           if (allFiles.length === 0) { setIsProcessing(false); return; }
   
           const destinationFolders = {};
-          let processedHashes = []; // Thay đổi: dùng let thay vì const để có thể gán lại
+          let processedHashes = [];
           let filesProcessed = 0;
-          const analyzerFunc = imageAnalyzer(); // Lấy hàm phân tích một lần
+          const analyzerFunc = imageAnalyzer();
   
           for (let i = 0; i < allFiles.length; i += concurrencyLevel) {
               const batch = allFiles.slice(i, i + concurrencyLevel);
@@ -487,7 +454,7 @@ function App() {
                               timestamp = file.createdTime;
                               timestampSource = 'Ngày tạo (Video)';
                           }
-                      } else { // It's an image
+                      } else { 
                           if (timeField === 'exifTime' && file.imageMediaMetadata?.time) {
                               timestamp = file.imageMediaMetadata.time.replace(/(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3');
                               timestampSource = 'Ngày chụp (EXIF)';
@@ -541,7 +508,6 @@ function App() {
                           return;
                       }
                       
-                      // [CẬP NHẬT] Phân tích ảnh bằng hàm client-side
                       const imageBlob = await downloadDriveFileAsBlob(file.id);
                       const analysisResult = await analyzerFunc(imageBlob, file.name);
                       let meetsCriteria = true;
@@ -560,20 +526,16 @@ function App() {
                                    meetsCriteria = false;
                                    log(` -> Loại (tương tự): '${file.name}'.`, 'error');
                               } else {
-                                  // Cảnh báo race condition: Để đơn giản, ta chấp nhận rủi ro nhỏ
-                                  // trong xử lý đồng thời. Một giải pháp tốt hơn cần cơ chế lock.
                                   processedHashes = [...processedHashes, newHash]; 
                               }
                           }
                           if (meetsCriteria && filterUnclearSubject) {
-                             // Ngưỡng độ nét có thể cần tinh chỉnh
                              if (analysisResult.sharpness < 50) { 
                                 meetsCriteria = false;
                                 log(` -> Loại (không rõ nét): '${file.name}' (Sharpness: ${analysisResult.sharpness.toFixed(2)}).`, 'error');
                              }
                           }
                           if (meetsCriteria && filterDarkFace) {
-                              // Ngưỡng độ sáng
                               if (analysisResult.brightness < 85) { 
                                 meetsCriteria = false;
                                 log(` -> Loại (mặt tối): '${file.name}' (Brightness: ${analysisResult.brightness.toFixed(2)}).`, 'error');
@@ -641,7 +603,6 @@ function App() {
     concurrencyLevel, setConcurrencyLevel,
     isSignedIn: !!accessToken,
     getDriveToken: getDriveAccessToken,
-    // [THÊM MỚI] Props cho OrganizerView
     onAnalyzerReady: setImageAnalyzer,
     isAnalyzerReady: !!imageAnalyzer,
   };
@@ -689,7 +650,6 @@ function App() {
 
         <div className="flex justify-center border-b mb-8 space-x-2">
             <button onClick={() => setView('schedule')} className={`py-2 px-4 text-lg font-semibold rounded-t-lg ${view === 'schedule' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>Lịch học</button>
-            {/* BỔ SUNG: Nút Thư viện ảnh */}
             <button onClick={() => setView('gallery')} className={`py-2 px-4 text-lg font-semibold rounded-t-lg ${view === 'gallery' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>Thư viện ảnh</button>
             <button onClick={() => setView('organizer')} className={`py-2 px-4 text-lg font-semibold rounded-t-lg ${view === 'organizer' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>Sắp xếp</button>
             {currentUser.role === 'Admin' && (
@@ -702,8 +662,8 @@ function App() {
 
         <div className="main-content">
             {view === 'schedule' && <ScheduleView recurringSchedule={recurringSchedule} setRecurringSchedule={setRecurringSchedule} oneOffSchedule={oneOffSchedule} setOneOffSchedule={setOneOffSchedule} log={log} currentUser={currentUser}/>}
-            {/* BỔ SUNG: Render có điều kiện cho Thư viện ảnh */}
-            {view === 'gallery' && <PhotoGalleryView accessToken={accessToken} apiKey={settings?.api_key} sourceFolderId={settings?.source_folder_id} log={log} getVideoCreationTime={getVideoCreationTime} backendUrl={BACKEND_URL} getDriveToken={getDriveAccessToken} onAuthError={handleAuthError} />}
+            {/* THAY ĐỔI 3: Xóa bỏ backendUrl prop không còn cần thiết */}
+            {view === 'gallery' && <PhotoGalleryView accessToken={accessToken} apiKey={settings?.api_key} sourceFolderId={settings?.source_folder_id} log={log} getVideoCreationTime={getVideoCreationTime} getDriveToken={getDriveAccessToken} onAuthError={handleAuthError} />}
             {view === 'organizer' && <OrganizerView {...organizerProps} />} 
             {currentUser.role === 'Admin' && view === 'settings' && <SettingsView {...settingsProps} />}
             {currentUser.role === 'Admin' && view === 'admin' && <AdminView {...adminProps} />}
