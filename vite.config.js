@@ -1,36 +1,23 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// Cập nhật Plugin để có một chính sách bảo mật đầy đủ hơn
-const cspPlugin = () => ({
-  name: 'csp-plugin',
-  configureServer: server => {
-    server.middlewares.use((req, res, next) => {
-      res.setHeader(
-        'Content-Security-Policy',
-        // THAY ĐỔI: Bổ sung các nguồn của Google vào chính sách
-        "default-src 'self'; " + // Mặc định chỉ cho phép từ chính trang web
-        // Cho phép script từ trang, inline, eval, và các CDN đáng tin cậy
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://cdn.jsdelivr.net; " +
-        // Cho phép style từ trang, inline, và CDN của flatpickr
-        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
-        // Cho phép kết nối API đến backend, Google Drive, và WebSocket cho Vite
-        "connect-src 'self' http://127.0.0.1:5001 https://www.googleapis.com ws:; " +
-        // Cho phép tải ảnh từ trang, blob data, và server ảnh của Google
-        "img-src 'self' data: https://lh3.googleusercontent.com;"
-      );
-      next();
-    });
-  },
-});
-
-
 export default defineConfig({
-  // Thêm plugin cspPlugin vào danh sách
-  plugins: [react(), cspPlugin()],
+  // Plugin react vẫn được giữ nguyên. Plugin csp tùy chỉnh đã được gỡ bỏ.
+  plugins: [react()],
   server: {
     host: '0.0.0.0',
     port: process.env.PORT || 5173,
+
+    // THAY ĐỔI: Áp dụng Content Security Policy trực tiếp thông qua server headers
+    // để đảm bảo tính nhất quán và khắc phục lỗi 'eval'.
+    headers: {
+      'Content-Security-Policy': 
+        "default-src 'self'; " +
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://cdn.jsdelivr.net; " +
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
+        "connect-src 'self' http://127.0.0.1:5001 https://www.googleapis.com ws:; " +
+        "img-src 'self' data: https://lh3.googleusercontent.com;"
+    },
     
     // Cấu hình CORS rõ ràng
     // Đảm bảo Vite server xử lý đúng các yêu cầu từ domain của bạn
