@@ -25,7 +25,9 @@ from google.auth.transport import requests as google_requests
 app = Flask(__name__)
 
 # --- Cấu hình CORS và Database ---
-CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "https://teachersupportapp.onrender.com"]}})
+# THAY ĐỔI 1: Cập nhật cấu hình CORS để chỉ cho phép các request đến /api/*
+# và thêm URL của Render vào danh sách origins được phép.
+CORS(app, resources={r"/api/*": {"origins": ["http://localhost:5173", "https://teachersupportapp.onrender.com"]}})
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your_default_secret_key')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -97,6 +99,7 @@ def admin_required(f):
     return decorated
 
 # --- API Endpoints ---
+# THAY ĐỔI 2: Thêm tiền tố /api vào tất cả các route để nhất quán
 @app.route('/api/save_drive_token', methods=['POST'])
 @token_required
 def save_drive_token(current_user):
@@ -121,9 +124,21 @@ def save_drive_token(current_user):
         db.session.rollback()
         return jsonify({'error': 'Failed to save drive token'}), 500
 
-@app.route('/settings', methods=['GET', 'POST'])
+@app.route('/api/settings', methods=['GET', 'POST'])
 def handle_settings():
     if request.method == 'POST':
+        # Yêu cầu token admin để thay đổi cài đặt
+        auth_header = request.headers.get('x-access-token')
+        if not auth_header:
+            return jsonify({'error': 'Token is missing for saving settings'}), 401
+        try:
+            data = jwt.decode(auth_header, app.config['SECRET_KEY'], algorithms=["HS256"])
+            user = User.query.get(data['user_id'])
+            if not user or user.role != 'Admin':
+                return jsonify({'error': 'Admin role required to save settings'}), 403
+        except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+            return jsonify({'error': 'Token is invalid or expired'}), 401
+
         data = request.get_json()
         settings = Setting.query.first()
         if not settings:
@@ -143,7 +158,7 @@ def handle_settings():
         return jsonify({ "client_id": settings.client_id, "api_key": settings.api_key, "source_folder_id": settings.source_folder_id }), 200
 
 # --- API Authentication ---
-@app.route('/auth/login', methods=['POST'])
+@app.route('/api/auth/login', methods=['POST'])
 def admin_login():
     data = request.get_json()
     print_to_stderr("--- ADMIN LOGIN ATTEMPT ---")
@@ -181,7 +196,7 @@ def admin_login():
     print_to_stderr("DEBUG: Token generated. Login successful.")
     return jsonify({'name': user.name, 'role': user.role, 'apiToken': token})
 
-@app.route('/auth/google-login', methods=['POST'])
+@app.route('/api/auth/google-login', methods=['POST'])
 def google_login():
     data = request.get_json()
     print_to_stderr("--- GOOGLE LOGIN ATTEMPT ---")
@@ -259,7 +274,7 @@ def serialize_user(user):
         'google_id': user.google_id
     }
 
-@app.route('/users', methods=['GET', 'POST'])
+@app.route('/api/users', methods=['GET', 'POST'])
 @token_required
 @admin_required
 def handle_users(current_user):
@@ -310,7 +325,7 @@ def handle_users(current_user):
             db.session.rollback()
             return jsonify({'error': 'Could not create user'}), 500
 
-@app.route('/users/<int:user_id>', methods=['DELETE'])
+@app.route('/api/users/<int:user_id>', methods=['DELETE'])
 @token_required
 @admin_required
 def delete_user(current_user, user_id):
@@ -332,7 +347,7 @@ def delete_user(current_user, user_id):
         db.session.rollback()
         return jsonify({'error': 'Could not delete user'}), 500
 
-@app.route('/users/<int:user_id>/role', methods=['PUT'])
+@app.route('/api/users/<int:user_id>/role', methods=['PUT'])
 @token_required
 @admin_required
 def update_user_role(current_user, user_id):
@@ -356,7 +371,7 @@ def update_user_role(current_user, user_id):
     
     return jsonify(serialize_user(user_to_update)), 200
 
-@app.route('/users/change-password', methods=['POST'])
+@app.route('/api/users/change-password', methods=['POST'])
 @token_required
 @admin_required
 def change_password(current_user):
@@ -372,7 +387,7 @@ def change_password(current_user):
 
 
 # --- Các API được bảo vệ ---
-@app.route('/recurring-schedules', methods=['GET', 'POST'])
+@app.route('/api/recurring-schedules', methods=['GET', 'POST'])
 @token_required
 def handle_recurring_schedules(current_user):
     if request.method == 'GET':
@@ -395,7 +410,7 @@ def handle_recurring_schedules(current_user):
             print_to_stderr(f"ERROR adding recurring schedule: {str(e)}")
             return jsonify({"error": "Lỗi máy chủ: Không thể thêm lịch định kỳ."}), 500
 
-@app.route('/recurring-schedules/<int:schedule_id>', methods=['PUT', 'DELETE'])
+@app.route('/api/recurring-schedules/<int:schedule_id>', methods=['PUT', 'DELETE'])
 @token_required
 def handle_single_recurring_schedule(current_user, schedule_id):
     schedule = RecurringSchedule.query.get(schedule_id)
@@ -418,7 +433,7 @@ def handle_single_recurring_schedule(current_user, schedule_id):
         db.session.commit()
         return jsonify({"message": "Schedule deleted"}), 200
 
-@app.route('/one-off-schedules', methods=['GET', 'POST'])
+@app.route('/api/one-off-schedules', methods=['GET', 'POST'])
 @token_required
 def handle_one_off_schedules(current_user):
     if request.method == 'GET':
@@ -440,7 +455,7 @@ def handle_one_off_schedules(current_user):
             print_to_stderr(f"ERROR adding one-off schedule: {str(e)}")
             return jsonify({"error": "Lỗi máy chủ: Không thể thêm lịch đột xuất."}), 500
 
-@app.route('/one-off-schedules/<int:schedule_id>', methods=['PUT', 'DELETE'])
+@app.route('/api/one-off-schedules/<int:schedule_id>', methods=['PUT', 'DELETE'])
 @token_required
 def handle_single_one_off_schedule(current_user, schedule_id):
     schedule = OneOffSchedule.query.get(schedule_id)
@@ -462,11 +477,7 @@ def handle_single_one_off_schedule(current_user, schedule_id):
         db.session.commit()
         return jsonify({"message": "Schedule deleted"}), 200
 
-# --- ĐÃ XÓA ENDPOINT /organize-photos VÌ LOGIC ĐÃ CHUYỂN SANG FRONTEND ---
-
-# --- ĐÃ XÓA ENDPOINT /analyze-image VÌ LOGIC ĐÃ CHUYỂN SANG FRONTEND ---
-
-@app.route('/video-metadata', methods=['POST'])
+@app.route('/api/video-metadata', methods=['POST'])
 @token_required
 def video_metadata(current_user):
     data = request.get_json()
@@ -477,7 +488,6 @@ def video_metadata(current_user):
     access_token = data['accessToken']
     temp_video_path = ""
     try:
-        # Tạo file tạm an toàn
         with tempfile.NamedTemporaryFile(delete=False, suffix=".tmp") as tmp:
             temp_video_path = tmp.name
 
@@ -490,7 +500,6 @@ def video_metadata(current_user):
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
         
-        # Lấy metadata bằng ffprobe
         command = ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_format', temp_video_path]
         result = subprocess.run(command, capture_output=True, text=True, check=True)
         metadata = json.loads(result.stdout)
@@ -501,7 +510,6 @@ def video_metadata(current_user):
         print_to_stderr(f"LỖI ffprobe: {e}")
         return jsonify({"error": str(e)}), 500
     finally:
-        # Dọn dẹp file tạm
         if temp_video_path and os.path.exists(temp_video_path):
             os.remove(temp_video_path)
 
@@ -542,9 +550,8 @@ def serialize_one_off(s):
         "id": s.id, "schoolName": s.school_name, "className": s.class_name,
         "date": s.date, "startTime": s.start_time, "endTime": s.end_time
     }
-    
-# --- ĐÃ XÓA HÀM get_brightness VÌ KHÔNG CÒN SỬ DỤNG ---
 
 if __name__ == '__main__':
     create_initial_admin()
     app.run(host='0.0.0.0', port=5001, debug=True)
+

@@ -124,42 +124,46 @@ function DateRangePicker({ startDate, endDate, onRangeChange }) {
 }
 
 // --- Fullscreen Viewer Component ---
-function FullscreenViewer({ file, onClose, onPrev, onNext }) {
+function FullscreenViewer({ file, onClose, onPrev, onNext, accessToken }) {
     const [mediaUrl, setMediaUrl] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     
-    const [isHighResLoaded, setIsHighResLoaded] = useState(false);
-
     useEffect(() => {
         if (!file) return;
 
         setIsLoading(true);
         setError(null);
         setMediaUrl(null);
-        setIsHighResLoaded(false);
 
-        if (file.mimeType.startsWith('image/') && file.thumbnailLink) {
-            const lowResUrl = `${file.thumbnailLink.split('=')[0]}=s400`;
-            const highResUrl = `${file.thumbnailLink.split('=')[0]}=s2048`;
-            
-            setMediaUrl(lowResUrl);
-            setIsLoading(false);
+        // Logic to set initial low-res image and then load high-res
+        const loadImage = () => {
+            if (file.thumbnailLink) {
+                const lowResUrl = `${file.thumbnailLink.split('=')[0]}=s400`;
+                const highResUrl = `${file.thumbnailLink.split('=')[0]}=s2048`;
 
-            const highResImg = new Image();
-            highResImg.src = highResUrl;
-            highResImg.onload = () => {
-                setMediaUrl(highResUrl);
-                setIsHighResLoaded(true);
-            };
-            highResImg.onerror = () => {
-                // Don't set an error, just stick with the low-res image
-                console.error("Could not load high-resolution image.");
-            };
+                // Immediately set low-res for quick display
+                setMediaUrl(lowResUrl);
+                setIsLoading(false);
+
+                // Preload high-res in the background
+                const highResImg = new Image();
+                highResImg.src = highResUrl;
+                highResImg.onload = () => {
+                    // Once loaded, update the state to show the high-res version
+                    setMediaUrl(highResUrl);
+                };
+            } else {
+                setError("Không có ảnh thumbnail để hiển thị.");
+                setIsLoading(false);
+            }
+        };
+
+        if (file.mimeType.startsWith('image/')) {
+            loadImage();
         } 
         else if (file.mimeType.startsWith('video/')) {
-            // Đối với video, chúng ta chỉ cần biết đó là video. Iframe sẽ xử lý việc tải.
-            setIsLoading(false);
+            setIsLoading(false); // For video, iframe handles its own loading
         }
         else {
              setError("Không thể hiển thị loại tệp này.");
@@ -185,22 +189,19 @@ function FullscreenViewer({ file, onClose, onPrev, onNext }) {
             <button className="absolute top-4 right-4 text-white hover:text-gray-300 z-50" onClick={onClose}><FullscreenCloseIcon /></button>
             <button className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 p-2" onClick={(e) => { e.stopPropagation(); onPrev(); }}><FullscreenPrevIcon /></button>
             
-            <div className="relative flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+            <div className="relative flex items-center justify-center max-w-[90vw] max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
                 {isLoading && <p className="text-white">Đang tải...</p>}
                 {error && !isLoading && <p className="text-red-400 p-4 bg-white rounded">{error}</p>}
                 
-                {/* Logic hiển thị ảnh giữ nguyên */}
                 {mediaUrl && file.mimeType.startsWith('image/') && !error && (
                     <img 
                         src={mediaUrl} 
                         alt={file.name} 
-                        className={`max-w-[90vw] max-h-[90vh] object-contain transition-all duration-300 ${isHighResLoaded ? 'blur-0' : 'blur-md'}`} 
+                        className="max-w-full max-h-full object-contain"
                     />
                 )}
-
-                {/* [SỬA ĐỔI] Logic hiển thị video giờ là một iframe đơn giản */}
+                
                 {file.mimeType.startsWith('video/') && !error && (
-                    // [SỬA ĐỔI] Tự tạo link nhúng từ file ID theo cú pháp chuẩn
                     <iframe
                         src={`https://drive.google.com/file/d/${file.id}/preview`}
                         className="w-[90vw] h-[90vh] max-w-[1600px] max-h-[900px] bg-black border-none"
@@ -217,7 +218,7 @@ function FullscreenViewer({ file, onClose, onPrev, onNext }) {
 }
 
 // --- Gallery Item Component with Lazy Loading ---
-function GalleryItem({ file, onSelect, onOpen, isSelected }) {
+function GalleryItem({ file, onSelect, onOpen, isSelected }) { // accessToken prop is removed
     const [thumbnailUrl, setThumbnailUrl] = useState('');
     const imgRef = useRef(null);
 
@@ -227,6 +228,7 @@ function GalleryItem({ file, onSelect, onOpen, isSelected }) {
                 entries.forEach((entry) => {
                     if (entry.isIntersecting) {
                         if (file.thumbnailLink) {
+                            // Directly set the URL for the browser to fetch, avoiding CORS issues.
                             const optimizedThumbUrl = `${file.thumbnailLink.split('=')[0]}=s320`;
                             setThumbnailUrl(optimizedThumbUrl);
                         }
@@ -237,16 +239,17 @@ function GalleryItem({ file, onSelect, onOpen, isSelected }) {
             { rootMargin: '200px' }
         );
 
-        if (imgRef.current) {
-            observer.observe(imgRef.current);
+        const currentRef = imgRef.current;
+        if (currentRef) {
+            observer.observe(currentRef);
         }
 
         return () => {
-            if (imgRef.current) {
-                observer.unobserve(imgRef.current);
+            if (currentRef) {
+                observer.unobserve(currentRef);
             }
         };
-    }, [file]);
+    }, [file.thumbnailLink]);
 
     return (
         <div ref={imgRef} className="relative group aspect-square bg-gray-200 rounded-lg overflow-hidden shadow-sm">
@@ -259,18 +262,18 @@ function GalleryItem({ file, onSelect, onOpen, isSelected }) {
                     loading="lazy"
                 />
             ) : (
-                <div className="w-full h-full bg-gray-200"></div>
+                <div className="w-full h-full bg-gray-200 animate-pulse"></div>
             )}
             <div 
-                className={`absolute inset-0 transition-all pointer-events-none
-                ${isSelected ? 'ring-4 ring-blue-500 ring-offset-2' : ''}
+                className={`absolute inset-0 transition-all pointer-events-none rounded-lg
+                ${isSelected ? 'ring-4 ring-blue-500 ring-offset-0' : ''}
                 ${file.isSelected ? 'border-4 border-yellow-400' : ''}`}
             ></div>
             <div className="absolute top-2 right-2 cursor-pointer" onClick={onSelect}>
                 {isSelected ? (
                     <CheckCircleIcon className="w-6 h-6 text-blue-500 bg-white rounded-full"/>
                 ) : (
-                    <div className="w-6 h-6 bg-black bg-opacity-20 border-2 border-white rounded-full group-hover:bg-opacity-40"></div>
+                    <div className="w-6 h-6 bg-black bg-opacity-20 border-2 border-white rounded-full group-hover:bg-opacity-40 transition-all"></div>
                 )}
             </div>
             <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 truncate pointer-events-none">
@@ -279,6 +282,7 @@ function GalleryItem({ file, onSelect, onOpen, isSelected }) {
         </div>
     );
 }
+
 
 // --- Re-authentication Component ---
 const ReAuthComponent = ({ getDriveToken }) => (
@@ -385,7 +389,8 @@ function PhotoGalleryView({ accessToken, apiKey, sourceFolderId, log, getVideoCr
                     log('Tải cấu trúc thư mục thành công.', 'success');
                 }
             } catch (error) {
-                if (error.message.includes('token')) return;
+                // Prevent error spam on re-auth
+                if (error.message.includes('token')) return; 
                 const errorMessage = `Lỗi tải thư mục: ${error.message}`;
                 log(errorMessage, 'error'); setError(errorMessage);
             } finally {
@@ -417,7 +422,6 @@ function PhotoGalleryView({ accessToken, apiKey, sourceFolderId, log, getVideoCr
                 const listFiles = async (folderId, fields) => {
                     const params = new URLSearchParams({
                         q: `'${folderId}' in parents and (mimeType contains 'image/' or mimeType contains 'video/') and trashed=false`,
-                        // [SỬA LỖI] Sửa lại cú pháp của 'fields' để đảm bảo chính xác và tránh lỗi 400
                         fields: `files(${fields},createdTime,imageMediaMetadata(time))`,
                         pageSize: 1000,
                     });
@@ -433,8 +437,8 @@ function PhotoGalleryView({ accessToken, apiKey, sourceFolderId, log, getVideoCr
                     const res = await driveApi(`files?${params.toString()}`);
                     return res.files.length > 0 ? res.files[0].id : null;
                 };
-
-                // [SỬA LỖI] Yêu cầu các trường cần thiết, bao gồm 'embedLink' cho video.
+                
+                // Fields needed for display and functionality
                 const fields = 'id, name, thumbnailLink, mimeType';
                 const classFilesPromise = listFiles(classId, fields);
                 const selectedFolderId = await findSelectedFolderId(classId);
@@ -474,7 +478,7 @@ function PhotoGalleryView({ accessToken, apiKey, sourceFolderId, log, getVideoCr
                     }
                 }
             } catch (error) {
-                if (error.message.includes('token')) return;
+                 if (error.message.includes('token')) return;
                 const errorMessage = `Lỗi tải ảnh: ${error.message}`;
                 log(errorMessage, 'error');
                 setError(errorMessage);
@@ -517,7 +521,7 @@ function PhotoGalleryView({ accessToken, apiKey, sourceFolderId, log, getVideoCr
             });
         }
         
-        setCurrentFiles(filesToFilter);
+        setCurrentFiles(filesToFilter.sort((a,b) => (a.name > b.name) ? 1 : -1));
 
     }, [allLoadedFiles, startDate, endDate]);
 
@@ -532,21 +536,19 @@ function PhotoGalleryView({ accessToken, apiKey, sourceFolderId, log, getVideoCr
     };
 
     const handleOpenFile = (index) => {
-        const fileIdToFind = currentFiles[index].id;
-        const indexInMasterList = allLoadedFiles.findIndex(file => file.id === fileIdToFind);
-        setFullscreenIndex(indexInMasterList);
+        setFullscreenIndex(index);
     };
     const handleCloseFullscreen = () => {
         setFullscreenIndex(null);
     };
     const handleNext = () => {
         if (fullscreenIndex !== null) {
-            setFullscreenIndex((prevIndex) => (prevIndex + 1) % allLoadedFiles.length);
+            setFullscreenIndex((prevIndex) => (prevIndex + 1) % currentFiles.length);
         }
     };
     const handlePrev = () => {
         if (fullscreenIndex !== null) {
-            setFullscreenIndex((prevIndex) => (prevIndex - 1 + allLoadedFiles.length) % allLoadedFiles.length);
+            setFullscreenIndex((prevIndex) => (prevIndex - 1 + currentFiles.length) % currentFiles.length);
         }
     };
     
@@ -601,10 +603,11 @@ function PhotoGalleryView({ accessToken, apiKey, sourceFolderId, log, getVideoCr
         <>
             {fullscreenIndex !== null && (
                 <FullscreenViewer
-                    file={allLoadedFiles[fullscreenIndex]}
+                    file={currentFiles[fullscreenIndex]}
                     onClose={handleCloseFullscreen}
                     onPrev={handlePrev}
                     onNext={handleNext}
+                    accessToken={accessToken}
                 />
             )}
             <div className="flex flex-col md:flex-row gap-8 h-[calc(100vh-200px)]">
@@ -661,6 +664,7 @@ function PhotoGalleryView({ accessToken, apiKey, sourceFolderId, log, getVideoCr
                                         onSelect={() => toggleFileSelection(file.id)}
                                         onOpen={() => handleOpenFile(index)}
                                         isSelected={selectedFiles.has(file.id)}
+                                        accessToken={accessToken}
                                     />
                                 ))}
                             </div>
@@ -673,4 +677,3 @@ function PhotoGalleryView({ accessToken, apiKey, sourceFolderId, log, getVideoCr
 }
 
 export default PhotoGalleryView;
-
