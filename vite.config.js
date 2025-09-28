@@ -16,7 +16,9 @@ export default defineConfig({
         "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://cdn.jsdelivr.net; " +
         "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
         "connect-src 'self' http://127.0.0.1:5001 https://www.googleapis.com ws:; " +
-        "img-src 'self' data: https://lh3.googleusercontent.com;"
+        "img-src 'self' data: https://lh3.googleusercontent.com; " +
+        // THÊM MỚI: Cho phép nhúng iframe từ trang và từ Google Drive
+        "frame-src 'self' https://drive.google.com;"
     },
     
     // Cấu hình CORS rõ ràng
