@@ -1,20 +1,17 @@
 #!/bin/bash
 
-# Bật tính năng quản lý tiến trình của bash
-set -m
+# In ra các biến môi trường để gỡ lỗi trên Render
+echo "--- Starting Services (Proxy Model) ---"
+echo "Render assigned public PORT: $PORT"
 
-# Khởi động service backend trong nền (background)
-echo "Dang khoi dong service Backend..."
-cd /app/backend
-gunicorn --workers 4 --bind 0.0.0.0:5001 --timeout 120 app:app &
+# 1. Khởi động Backend service trên một cổng nội bộ cố định (5001) trong background
+echo "Starting Backend service on internal port 5001..."
+(cd backend && gunicorn --bind 0.0.0.0:5001 app:app) &
 
-# Chờ một chút để backend ổn định (tùy chọn)
+# Chờ một chút để backend có thời gian khởi động (tùy chọn nhưng được khuyến khích)
 sleep 5
 
-# Khởi động service frontend ở tiền cảnh (foreground)
-# Cờ --host là cần thiết để server của Vite có thể được truy cập từ bên ngoài container
-echo "Dang khoi dong service Frontend..."
-cd /app
-npm run build && npx serve -s dist
-
-
+# 2. Khởi động Frontend service (Vite dev server) ở tiền cảnh
+# Vite sẽ tự động đọc biến môi trường PORT từ file vite.config.js và lắng nghe trên đó.
+echo "Starting Frontend service on public port $PORT..."
+npm run dev
