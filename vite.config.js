@@ -1,17 +1,21 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// THÊM MỚI: Plugin để tùy chỉnh header Content-Security-Policy
+// Cập nhật Plugin để có một chính sách bảo mật đầy đủ hơn
 const cspPlugin = () => ({
   name: 'csp-plugin',
   configureServer: server => {
     server.middlewares.use((req, res, next) => {
       res.setHeader(
         'Content-Security-Policy',
-        // 'self': Cho phép script từ cùng nguồn.
-        // 'unsafe-eval': Cho phép sử dụng eval(), khắc phục lỗi của bạn.
-        // https://...: Các nguồn đáng tin cậy khác cho các thư viện bên ngoài (Google, CDN).
-        "script-src 'self' 'unsafe-eval' https://accounts.google.com https://cdn.jsdelivr.net;"
+        // THAY ĐỔI: Thiết lập một chính sách bảo mật hoàn chỉnh hơn
+        "default-src 'self'; " + // Mặc định chỉ cho phép từ chính trang web
+        // Cho phép script từ trang, inline, eval, và các CDN đáng tin cậy
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://cdn.jsdelivr.net; " +
+        // Cho phép style từ trang, inline, và CDN của flatpickr
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
+        // Cho phép kết nối API đến backend và kết nối WebSocket (ws:) cho Vite
+        "connect-src 'self' http://127.0.0.1:5001 ws:;"
       );
       next();
     });
@@ -20,7 +24,7 @@ const cspPlugin = () => ({
 
 
 export default defineConfig({
-  // THAY ĐỔI: Thêm plugin cspPlugin vào danh sách
+  // Thêm plugin cspPlugin vào danh sách
   plugins: [react(), cspPlugin()],
   server: {
     host: '0.0.0.0',
