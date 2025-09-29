@@ -13,10 +13,11 @@ export default defineConfig({
         "default-src 'self'; " +
         "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; " +
         "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
-        // THAY ĐỔI: Thêm https://cdn.jsdelivr.net để cho phép tải các model AI
         "connect-src 'self' http://127.0.0.1:5001 https://www.googleapis.com https://cdn.jsdelivr.net ws:; " +
         "img-src 'self' data: https://lh3.googleusercontent.com; " +
-        "frame-src 'self' https://drive.google.com;"
+        "frame-src 'self' https://drive.google.com; " +
+        // THÊM MỚI: Cho phép tạo worker từ trang và từ 'blob:' để thư viện AI hoạt động
+        "worker-src 'self' blob:;"
     },
     
     // Cấu hình CORS rõ ràng
