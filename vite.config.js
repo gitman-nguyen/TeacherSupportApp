@@ -13,7 +13,8 @@ export default defineConfig({
     headers: {
       'Content-Security-Policy': 
         "default-src 'self'; " +
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://cdn.jsdelivr.net; " +
+        // THAY ĐỔI: Thêm https://cdnjs.cloudflare.com để cho phép tải thư viện JSZip
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; " +
         "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
         "connect-src 'self' http://127.0.0.1:5001 https://www.googleapis.com ws:; " +
         "img-src 'self' data: https://lh3.googleusercontent.com; " +
