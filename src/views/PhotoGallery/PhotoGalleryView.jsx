@@ -316,6 +316,7 @@ function PhotoGalleryView({ accessToken, apiKey, sourceFolderId, log, getVideoCr
     const [fullscreenIndex, setFullscreenIndex] = useState(null);
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
+    // MODIFIED: Store more info about the current class, including school name
     const [currentClassInfo, setCurrentClassInfo] = useState(null);
 
     const getFolderIdFromInput = (input) => {
@@ -400,8 +401,9 @@ function PhotoGalleryView({ accessToken, apiKey, sourceFolderId, log, getVideoCr
         fetchFolderTree();
     }, [accessToken, apiKey, sourceFolderId, log, driveApi]);
 
-    const handleClassClick = (className, classId) => {
-        setCurrentClassInfo({ name: className, id: classId });
+    // MODIFIED: Function now accepts schoolName to store it in state
+    const handleClassClick = (schoolName, className, classId) => {
+        setCurrentClassInfo({ school: schoolName, name: className, id: classId });
         setActiveClass(classId);
     };
 
@@ -409,8 +411,9 @@ function PhotoGalleryView({ accessToken, apiKey, sourceFolderId, log, getVideoCr
         const fetchAndEnrichFiles = async () => {
             if (!currentClassInfo || !accessToken) return;
 
-            const { name: className, id: classId } = currentClassInfo;
-            log(`Đang tải ảnh cho lớp: ${className}...`, 'info');
+            // MODIFIED: Destructure school, className, and classId from currentClassInfo
+            const { school, name: className, id: classId } = currentClassInfo;
+            log(`Đang tải ảnh cho lớp: ${className} (${school})...`, 'info');
             
             setIsLoading(true);
             setAllLoadedFiles([]);
@@ -576,7 +579,23 @@ function PhotoGalleryView({ accessToken, apiKey, sourceFolderId, log, getVideoCr
             const content = await zip.generateAsync({ type: "blob" });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(content);
-            link.download = `download_${new Date().getTime()}.zip`;
+
+            // --- MODIFIED: Dynamic ZIP file naming logic ---
+            let zipFileName = `selected_files.zip`; // Default name
+            if (currentClassInfo) {
+                const schoolName = currentClassInfo.school || 'School';
+                const className = currentClassInfo.name || 'Class';
+                const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+                
+                // Sanitize names for file system compatibility
+                const safeSchoolName = schoolName.replace(/[^a-zA-Z0-9_.]/g, '_');
+                const safeClassName = className.replace(/[^a-zA-Z0-9_.]/g, '_');
+
+                zipFileName = `${safeSchoolName}_${safeClassName}_${today}.zip`;
+            }
+            link.download = zipFileName;
+            // --- END OF MODIFICATION ---
+
             document.body.appendChild(link); link.click(); document.body.removeChild(link);
             log('Tải xuống thành công!', 'success');
         } catch(error) {
@@ -625,7 +644,8 @@ function PhotoGalleryView({ accessToken, apiKey, sourceFolderId, log, getVideoCr
                                     <ul className="pl-4 mt-1 border-l-2 border-gray-200">
                                         {tree[schoolName].map(cls => (
                                             <li key={cls.id}>
-                                                <button onClick={() => handleClassClick(cls.name, cls.id)} className={`w-full text-left p-2 rounded-md text-sm flex items-center gap-2 ${activeClass === cls.id ? 'bg-blue-100 text-blue-700 font-semibold' : 'hover:bg-gray-100'}`}>
+                                                {/* MODIFIED: Pass schoolName to the click handler */}
+                                                <button onClick={() => handleClassClick(schoolName, cls.name, cls.id)} className={`w-full text-left p-2 rounded-md text-sm flex items-center gap-2 ${activeClass === cls.id ? 'bg-blue-100 text-blue-700 font-semibold' : 'hover:bg-gray-100'}`}>
                                                     <FolderIcon className="w-4 h-4 text-gray-500" /> {cls.name}
                                                 </button>
                                             </li>
