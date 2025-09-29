@@ -302,6 +302,15 @@ const ReAuthComponent = ({ getDriveToken }) => (
     </div>
 );
 
+// --- Helper function to remove Vietnamese diacritics ---
+const removeDiacritics = (str) => {
+    return str
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D');
+};
+
 // --- Main Gallery View Component ---
 function PhotoGalleryView({ accessToken, apiKey, sourceFolderId, log, getVideoCreationTime, getDriveToken, onAuthError }) {
     const [tree, setTree] = useState({});
@@ -587,9 +596,13 @@ function PhotoGalleryView({ accessToken, apiKey, sourceFolderId, log, getVideoCr
                 const className = currentClassInfo.name || 'Class';
                 const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
                 
+                // Convert to non-diacritic string
+                const schoolNameNoDiacritics = removeDiacritics(schoolName);
+                const classNameNoDiacritics = removeDiacritics(className);
+
                 // Sanitize names for file system compatibility
-                const safeSchoolName = schoolName.replace(/[^a-zA-Z0-9_.]/g, '_');
-                const safeClassName = className.replace(/[^a-zA-Z0-9_.]/g, '_');
+                const safeSchoolName = schoolNameNoDiacritics.replace(/[^a-zA-Z0-9_.]/g, '_');
+                const safeClassName = classNameNoDiacritics.replace(/[^a-zA-Z0-9_.]/g, '_');
 
                 zipFileName = `${safeSchoolName}_${safeClassName}_${today}.zip`;
             }
@@ -697,3 +710,4 @@ function PhotoGalleryView({ accessToken, apiKey, sourceFolderId, log, getVideoCr
 }
 
 export default PhotoGalleryView;
+
