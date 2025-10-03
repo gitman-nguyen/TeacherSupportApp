@@ -156,7 +156,9 @@ function OrganizerView({
 
             //const hash = await window.pHash(img);
             
-            let hash = null;
+           let hash = null;
+            let pHashResult = null;   // ✅ luôn khai báo trước để tránh undefined
+
             try {
             if (window.pHash && typeof window.pHash.hash === 'function') {
                 // Convert Blob -> File vì pHash.hash chỉ nhận File
@@ -166,9 +168,8 @@ function OrganizerView({
                 { type: processedBlob.type || "image/jpeg" }
                 );
 
-                const pHashResult = await window.pHash.hash(fileForHash);
+                pHashResult = await window.pHash.hash(fileForHash);   // ✅ gán vào biến toàn cục trong scope try
 
-                // pHashResult có thể là object với toBinary()/toHex() hoặc property .value
                 if (pHashResult) {
                 if (typeof pHashResult.toBinary === 'function') {
                     hash = pHashResult.toBinary();       // ví dụ: "101010011..."
@@ -181,7 +182,7 @@ function OrganizerView({
                 }
                 }
             } else if (typeof window.phash === 'function') {
-                // chỉ đề phòng nếu library expose khác tên (hiếm)
+                // fallback nếu lib expose khác tên
                 hash = await window.phash(processedBlob);
             } else {
                 console.warn("[analyzeImage] pHash library không có method .hash hoặc không đúng export.");
