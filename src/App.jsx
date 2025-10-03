@@ -128,7 +128,6 @@ function App() {
       }
       log('Đang lưu Access Token Drive vào hồ sơ người dùng...', 'info');
       try {
-          // Gửi cả access_token và refresh_token (nếu có)
           await fetchApiData('/save_drive_token', 'POST', { 
             access_token: tokenData.access_token,
             refresh_token: tokenData.refresh_token 
@@ -161,7 +160,6 @@ function App() {
                 setAccessToken(tokenResponse.access_token);
                 localStorage.setItem('accessToken', tokenResponse.access_token);
                 
-                // Gửi toàn bộ tokenResponse lên backend
                 saveDriveAccessToken(tokenResponse, userApiToken);
                 
                 log('Đã có quyền truy cập Google Drive!', 'success');
@@ -331,8 +329,16 @@ function App() {
     }, [currentUser?.apiToken, fetchApiData]);
 
     const organizePhotos = useCallback(async () => {
-      if (!imageAnalyzer) {
-          log('Lỗi: Bộ phân tích AI chưa sẵn sàng. Vui lòng đợi model tải xong rồi thử lại.', 'error');
+      // DEBUG: Kiểm tra trạng thái của imageAnalyzer khi bắt đầu
+      console.log('[App.jsx] Bắt đầu organizePhotos. Kiểu của imageAnalyzer:', typeof imageAnalyzer);
+
+      // SỬA LỖI: Lấy hàm phân tích từ state.
+      // Nếu state là một hàm trả về hàm khác (do cách chúng ta sửa lỗi trước), chúng ta gọi nó để lấy hàm thật.
+      const analyzerFunc = typeof imageAnalyzer === 'function' ? imageAnalyzer() : null;
+
+      if (typeof analyzerFunc !== 'function') {
+          log('Lỗi: Bộ phân tích AI chưa sẵn sàng hoặc không phải là một hàm. Vui lòng đợi model tải xong rồi thử lại.', 'error');
+          console.error('[App.jsx] LỖI NGHIÊM TRỌNG: analyzerFunc không phải là một hàm.', analyzerFunc);
           setIsProcessing(false);
           return;
       }
@@ -442,9 +448,6 @@ function App() {
           const destinationFolders = {};
           let processedHashes = [];
           let filesProcessed = 0;
-          
-          // SỬA LỖI: Gán trực tiếp hàm phân tích (imageAnalyzer) thay vì gọi nó.
-          const analyzerFunc = imageAnalyzer;
   
           for (let i = 0; i < allFiles.length; i += concurrencyLevel) {
               const batch = allFiles.slice(i, i + concurrencyLevel);
@@ -522,7 +525,7 @@ function App() {
   
                       if (!analysisResult || analysisResult.error) {
                           meetsCriteria = false;
-                          log(` -> Bỏ qua (Không tìm thấy khuôn mặt): '${file.name}'.`, 'warn');
+                          log(` -> Bỏ qua (${analysisResult?.error || 'lỗi không xác định'}): '${file.name}'.`, 'warn');
                       } else {
                            if (removeDuplicates) {
                               const newHash = analysisResult.hash;

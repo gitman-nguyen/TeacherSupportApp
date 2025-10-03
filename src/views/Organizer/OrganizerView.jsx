@@ -109,7 +109,14 @@ function OrganizerView({
         };
 
         const analyzeImage = async (imageBlob, fileName) => {
-            // SỬA LỖI: Thêm bước kiểm tra để đảm bảo fileName hợp lệ
+            // DEBUG: Kiểm tra các tham số đầu vào
+            console.log(`[analyzeImage] Bắt đầu phân tích. File: ${fileName}, Blob hợp lệ: ${imageBlob instanceof Blob}`);
+            
+            if (!(imageBlob instanceof Blob)) {
+                console.error("[analyzeImage] LỖI: Đầu vào không phải là một Blob hợp lệ. Dừng phân tích.", imageBlob);
+                return { error: 'Dữ liệu ảnh nhận được không hợp lệ.' };
+            }
+
             let processedBlob = imageBlob;
             if (fileName && (fileName.toLowerCase().endsWith('.heic') || imageBlob.type === 'image/heic')) {
                 if (!window.heic2any) {
@@ -118,11 +125,7 @@ function OrganizerView({
                 }
                 try {
                     console.log(`[DEBUG] Đang chuyển đổi file HEIC: ${fileName}`);
-                    processedBlob = await window.heic2any({
-                        blob: imageBlob,
-                        toType: "image/jpeg",
-                        quality: 0.8,
-                    });
+                    processedBlob = await window.heic2any({ blob: imageBlob, toType: "image/jpeg", quality: 0.8 });
                 } catch (err) {
                     console.error(`Lỗi chuyển đổi HEIC: ${err.message}`);
                     return { error: `Không thể xử lý file HEIC: ${fileName}` };
@@ -133,14 +136,8 @@ function OrganizerView({
             img.crossOrigin = "anonymous";
             const url = URL.createObjectURL(processedBlob);
             await new Promise((resolve, reject) => {
-                img.onload = () => {
-                    URL.revokeObjectURL(url);
-                    resolve();
-                };
-                img.onerror = (err) => {
-                    URL.revokeObjectURL(url);
-                    reject(err);
-                };
+                img.onload = () => { URL.revokeObjectURL(url); resolve(); };
+                img.onerror = (err) => { URL.revokeObjectURL(url); reject(err); };
                 img.src = url;
             });
 
@@ -237,18 +234,14 @@ function OrganizerView({
                 setModelsLoaded(true);
                 if (typeof onAnalyzerReady === 'function') {
                     console.log("[DEBUG] Model đã sẵn sàng. Gọi onAnalyzerReady.");
-                    onAnalyzerReady(analyzeImage);
+                    // SỬA LỖI: Bọc hàm trong một hàm khác để React không hiểu nhầm.
+                    // Cách này đảm bảo React sẽ lưu trữ chính hàm `analyzeImage` vào state,
+                    // thay vì thực thi nó ngay lập tức.
+                    onAnalyzerReady(() => analyzeImage);
                 }
             } catch (error) {
-                console.error('--- LỖI CHI TIẾT KHI TẢI MODEL ---');
-                console.error('Error object:', error);
-                if (error instanceof Error) {
-                    console.error('Error message:', error.message);
-                    console.error('Error stack:', error.stack);
-                }
-                console.error('------------------------------------');
-
-                setModelLoadingError(`Lỗi tải model AI: ${error.message}. Vui lòng kiểm tra console (F12).`);
+                console.error('--- LỖI CHI TIẾT KHI TẢI MODEL ---', error);
+                setModelLoadingError(`Lỗi tải model AI: ${error.message}.`);
             }
         };
 
