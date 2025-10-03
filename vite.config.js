@@ -15,6 +15,7 @@ export default defineConfig({
         "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
         "connect-src 'self' http://127.0.0.1:5001 https://www.googleapis.com https://cdn.jsdelivr.net ws:; " +
         "img-src 'self' data: https://lh3.googleusercontent.com; " +
+        "img-src 'self' data: blob: https://lh3.googleusercontent.com; " + 
         "frame-src 'self' https://drive.google.com; " +
         // SỬA LỖI: Đảm bảo có chỉ thị worker-src để thư viện AI hoạt động
         "worker-src 'self' blob:;"
