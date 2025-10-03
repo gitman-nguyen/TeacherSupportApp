@@ -109,9 +109,9 @@ function OrganizerView({
         };
 
         const analyzeImage = async (imageBlob, fileName) => {
-            // Bổ sung xử lý HEIC
+            // SỬA LỖI: Thêm bước kiểm tra để đảm bảo fileName hợp lệ
             let processedBlob = imageBlob;
-            if (fileName.toLowerCase().endsWith('.heic') || imageBlob.type === 'image/heic') {
+            if (fileName && (fileName.toLowerCase().endsWith('.heic') || imageBlob.type === 'image/heic')) {
                 if (!window.heic2any) {
                     console.error("Thư viện heic2any chưa được tải.");
                     return { error: `Không thể xử lý file HEIC: ${fileName}` };
@@ -237,7 +237,6 @@ function OrganizerView({
                 setModelsLoaded(true);
                 if (typeof onAnalyzerReady === 'function') {
                     console.log("[DEBUG] Model đã sẵn sàng. Gọi onAnalyzerReady.");
-                    // SỬA LỖI: Truyền trực tiếp hàm `analyzeImage` thay vì bọc nó
                     onAnalyzerReady(analyzeImage);
                 }
             } catch (error) {
