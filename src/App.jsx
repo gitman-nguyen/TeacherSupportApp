@@ -329,8 +329,9 @@ function App() {
     }, [currentUser?.apiToken, fetchApiData]);
 
     const organizePhotos = useCallback(async () => {
-      // SỬA LỖI: Lấy trực tiếp hàm phân tích từ state.
-      const analyzerFunc = imageAnalyzer;
+      // SỬA LỖI: Lấy hàm phân tích từ state bằng cách gọi hàm bao bọc.
+      const getAnalyzerFunc = imageAnalyzer;
+      const analyzerFunc = (typeof getAnalyzerFunc === 'function') ? getAnalyzerFunc() : null;
 
       if (typeof analyzerFunc !== 'function') {
           log('Lỗi: Bộ phân tích AI chưa sẵn sàng hoặc không phải là một hàm. Vui lòng đợi model tải xong rồi thử lại.', 'error');
@@ -679,3 +680,4 @@ function App() {
 }
 
 export default App;
+
