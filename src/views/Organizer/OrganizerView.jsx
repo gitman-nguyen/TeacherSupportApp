@@ -154,8 +154,46 @@ function OrganizerView({
             const face = detections[0];
             const box = face.detection.box;
 
-            const hash = await window.pHash(img);
+            //const hash = await window.pHash(img);
             
+            let hash = null;
+            try {
+            if (window.pHash && typeof window.pHash.hash === 'function') {
+                // pHash.hash nhận File/Blob (README dùng files[0]), nên truyền processedBlob thay vì Image element
+                const pHashResult = await window.pHash.hash(processedBlob);
+
+                // pHashResult có thể là object với toBinary()/toHex() hoặc property .value
+                if (pHashResult) {
+                if (typeof pHashResult.toBinary === 'function') {
+                    hash = pHashResult.toBinary();       // ví dụ: "101010011..."
+                } else if (typeof pHashResult.toString === 'function' && typeof pHashResult === 'string') {
+                    hash = pHashResult;
+                } else if (pHashResult.value) {
+                    hash = String(pHashResult.value);
+                } else if (typeof pHashResult === 'string') {
+                    hash = pHashResult;
+                } else {
+                    // fallback: convert object to string (ít khả thi)
+                    hash = JSON.stringify(pHashResult);
+                }
+                }
+            } else if (typeof window.phash === 'function') {
+                // chỉ đề phòng nếu library expose khác tên (hiếm)
+                hash = await window.phash(processedBlob);
+            } else {
+                console.warn("[analyzeImage] pHash library không có method .hash hoặc không đúng export.");
+            }
+            } catch (err) {
+            console.error("[analyzeImage] LỖI khi gọi pHash.hash:", err);
+            }
+
+            if (!hash) {
+            console.error(`[analyzeImage] Không thể tạo hash cho file: ${fileName || ''}`);
+            return { error: 'hash_generation_failed' };
+            }
+
+            console.log('[DEBUG] pHash result:', pHashResult);
+
             const imageData = ctx.getImageData(0, 0, img.width, img.height).data;
             let totalLuminance = 0, totalSaturation = 0;
             const luminances = [];
