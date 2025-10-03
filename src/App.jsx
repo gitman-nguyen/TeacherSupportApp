@@ -32,6 +32,7 @@ function App() {
   const [progress, setProgress] = useState(0);
   const [origin, setOrigin] = useState('');
   const [concurrencyLevel, setConcurrencyLevel] = useState(5);
+  // imageAnalyzer WILL hold the actual analyzer function (imageBlob, fileName) => Promise<analysis>
   const [imageAnalyzer, setImageAnalyzer] = useState(null);
 
   const logContainerRef = useRef(null);
@@ -327,12 +328,47 @@ function App() {
         if (!currentUser?.apiToken) throw new Error("Chưa xác thực hoặc thiếu token API.");
         return await fetchApiData(`/users/${userId}/role`, 'PUT', { role: newRole }, currentUser.apiToken);
     }, [currentUser?.apiToken, fetchApiData]);
+    
+    // ------------------
+    // NORMALIZE / REGISTER ANALYZER
+    // ------------------
+    // We accept two possible call shapes from OrganizerView:
+    // 1) onAnalyzerReady(analyzeImage)           -> analyzer function passed directly
+    // 2) onAnalyzerReady(() => analyzeImage)     -> factory that returns the analyzer
+    // This helper will normalize and store the actual analyzer function in state.
+    const registerAnalyzer = useCallback((analyzerFactory) => {
+      if (typeof analyzerFactory !== 'function') {
+        log('onAnalyzerReady received non-function. Không đăng ký analyzer.', 'error');
+        console.error('[App.jsx] registerAnalyzer: expected function, got:', analyzerFactory);
+        return;
+      }
+      try {
+        const analyzer = (analyzerFactory.length === 0) ? analyzerFactory() : analyzerFactory;
+        if (typeof analyzer !== 'function') {
+          log('onAnalyzerReady did not return a valid function. Không đăng ký analyzer.', 'error');
+          console.error('[App.jsx] registerAnalyzer: returned value is not function:', analyzer);
+          return;
+        }
+        // store the analyzer function as state value; wrap in arrow so React doesn't treat it as updater
+        setImageAnalyzer(() => analyzer);
+        log('Bộ phân tích AI đã đăng ký thành công.', 'success');
+      } catch (err) {
+        log(`Lỗi khi đăng ký bộ phân tích AI: ${err.message}`, 'error');
+        console.error('[App.jsx] registerAnalyzer error:', err);
+      }
+    }, [log]);
 
+    // ------------------
+    // MAIN ORGANIZE FUNCTION
+    // ------------------
     const organizePhotos = useCallback(async () => {
-      // SỬA LỖI TRIỆT ĐỂ: `imageAnalyzer` lưu một hàm `() => analyzeImage`.
-      // Ta cần gọi hàm đó để lấy ra hàm `analyzeImage` thực sự.
-      const getAnalyzerFunc = imageAnalyzer;
-      const analyzerFunc = typeof getAnalyzerFunc === 'function' ? getAnalyzerFunc() : null;
+      // Normalize imageAnalyzer into an actual analyzer function that accepts (blob, fileName)
+      let analyzerFunc = null;
+      if (typeof imageAnalyzer === 'function') {
+        // If imageAnalyzer was stored directly as analyzer (arity >= 1), use it.
+        // If it is a zero-arg factory (unexpected but possible), call it once.
+        analyzerFunc = (imageAnalyzer.length === 0) ? imageAnalyzer() : imageAnalyzer;
+      }
 
       if (typeof analyzerFunc !== 'function') {
           log('Lỗi: Bộ phân tích AI chưa sẵn sàng hoặc không phải là một hàm. Vui lòng đợi model tải xong rồi thử lại.', 'error');
@@ -612,7 +648,8 @@ function App() {
     concurrencyLevel, setConcurrencyLevel,
     isSignedIn: !!accessToken,
     getDriveToken: getDriveAccessToken,
-    onAnalyzerReady: setImageAnalyzer,
+    // use our normalization wrapper so the parent always receives the analyzer function correctly
+    onAnalyzerReady: registerAnalyzer,
     isAnalyzerReady: !!imageAnalyzer,
   };
   
@@ -680,5 +717,4 @@ function App() {
   );
 }
 
-export default App;
-
+export default App
