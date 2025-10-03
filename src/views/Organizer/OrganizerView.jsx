@@ -109,7 +109,6 @@ function OrganizerView({
         };
 
         const analyzeImage = async (imageBlob, fileName) => {
-            // DEBUG: Kiểm tra các tham số đầu vào
             console.log(`[analyzeImage] Bắt đầu phân tích. File: ${fileName}, Blob hợp lệ: ${imageBlob instanceof Blob}`);
             
             if (!(imageBlob instanceof Blob)) {
@@ -234,10 +233,8 @@ function OrganizerView({
                 setModelsLoaded(true);
                 if (typeof onAnalyzerReady === 'function') {
                     console.log("[DEBUG] Model đã sẵn sàng. Gọi onAnalyzerReady.");
-                    // SỬA LỖI: Bọc hàm trong một hàm khác để React không hiểu nhầm.
-                    // Cách này đảm bảo React sẽ lưu trữ chính hàm `analyzeImage` vào state,
-                    // thay vì thực thi nó ngay lập tức.
-                    onAnalyzerReady(() => analyzeImage);
+                    // SỬA LỖI: Truyền trực tiếp hàm `analyzeImage` thay vì bọc nó.
+                    onAnalyzerReady(analyzeImage);
                 }
             } catch (error) {
                 console.error('--- LỖI CHI TIẾT KHI TẢI MODEL ---', error);
@@ -372,4 +369,3 @@ function OrganizerView({
 }
 
 export default OrganizerView;
-

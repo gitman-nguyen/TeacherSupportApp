@@ -329,12 +329,8 @@ function App() {
     }, [currentUser?.apiToken, fetchApiData]);
 
     const organizePhotos = useCallback(async () => {
-      // DEBUG: Kiểm tra trạng thái của imageAnalyzer khi bắt đầu
-      console.log('[App.jsx] Bắt đầu organizePhotos. Kiểu của imageAnalyzer:', typeof imageAnalyzer);
-
-      // SỬA LỖI: Lấy hàm phân tích từ state.
-      // Nếu state là một hàm trả về hàm khác (do cách chúng ta sửa lỗi trước), chúng ta gọi nó để lấy hàm thật.
-      const analyzerFunc = typeof imageAnalyzer === 'function' ? imageAnalyzer() : null;
+      // SỬA LỖI: Lấy trực tiếp hàm phân tích từ state.
+      const analyzerFunc = imageAnalyzer;
 
       if (typeof analyzerFunc !== 'function') {
           log('Lỗi: Bộ phân tích AI chưa sẵn sàng hoặc không phải là một hàm. Vui lòng đợi model tải xong rồi thử lại.', 'error');
@@ -683,4 +679,3 @@ function App() {
 }
 
 export default App;
-
