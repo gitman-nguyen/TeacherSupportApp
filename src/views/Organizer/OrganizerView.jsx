@@ -157,10 +157,10 @@ function OrganizerView({
             //const hash = await window.pHash(img);
             
            let hash = null;
-            let pHashResult = null;   // ✅ luôn khai báo trước để tránh undefined
+           let pHashResult = null;   // ✅ luôn khai báo trước để tránh undefined
 
-            try {
-            if (window.pHash && typeof window.pHash.hash === 'function') {
+           try {
+           if (window.pHash && typeof window.pHash.hash === 'function') {
                 // Convert Blob -> File vì pHash.hash chỉ nhận File
                 const fileForHash = new File(
                 [processedBlob],
@@ -181,20 +181,20 @@ function OrganizerView({
                     hash = JSON.stringify(pHashResult);
                 }
                 }
-            } else if (typeof window.phash === 'function') {
+           } else if (typeof window.phash === 'function') {
                 // fallback nếu lib expose khác tên
                 hash = await window.phash(processedBlob);
-            } else {
+           } else {
                 console.warn("[analyzeImage] pHash library không có method .hash hoặc không đúng export.");
-            }
-            } catch (err) {
+           }
+           } catch (err) {
             console.error("[analyzeImage] LỖI khi gọi pHash.hash:", err);
-            }
+           }
 
-            if (!hash) {
-            console.error(`[analyzeImage] Không thể tạo hash cho file: ${fileName || ''}`);
-            return { error: 'hash_generation_failed' };
-            }
+           if (!hash) {
+           console.error(`[analyzeImage] Không thể tạo hash cho file: ${fileName || ''}`);
+           return { error: 'hash_generation_failed' };
+           }
 
 
             console.log('[DEBUG] pHash result:', pHashResult);
