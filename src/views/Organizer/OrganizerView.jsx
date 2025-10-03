@@ -109,6 +109,7 @@ function OrganizerView({
         };
 
         const analyzeImage = async (imageBlob, fileName) => {
+            // Bổ sung xử lý HEIC
             let processedBlob = imageBlob;
             if (fileName.toLowerCase().endsWith('.heic') || imageBlob.type === 'image/heic') {
                 if (!window.heic2any) {
@@ -236,7 +237,7 @@ function OrganizerView({
                 setModelsLoaded(true);
                 if (typeof onAnalyzerReady === 'function') {
                     console.log("[DEBUG] Model đã sẵn sàng. Gọi onAnalyzerReady.");
-                    // SỬA LỖI: Truyền trực tiếp hàm `analyzeImage` thay vì bọc nó trong một hàm khác.
+                    // SỬA LỖI: Truyền trực tiếp hàm `analyzeImage` thay vì bọc nó
                     onAnalyzerReady(analyzeImage);
                 }
             } catch (error) {

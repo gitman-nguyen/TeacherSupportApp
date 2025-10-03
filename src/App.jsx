@@ -128,6 +128,7 @@ function App() {
       }
       log('Đang lưu Access Token Drive vào hồ sơ người dùng...', 'info');
       try {
+          // Gửi cả access_token và refresh_token (nếu có)
           await fetchApiData('/save_drive_token', 'POST', { 
             access_token: tokenData.access_token,
             refresh_token: tokenData.refresh_token 
@@ -160,6 +161,7 @@ function App() {
                 setAccessToken(tokenResponse.access_token);
                 localStorage.setItem('accessToken', tokenResponse.access_token);
                 
+                // Gửi toàn bộ tokenResponse lên backend
                 saveDriveAccessToken(tokenResponse, userApiToken);
                 
                 log('Đã có quyền truy cập Google Drive!', 'success');
