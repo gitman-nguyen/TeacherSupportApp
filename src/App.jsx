@@ -329,9 +329,10 @@ function App() {
     }, [currentUser?.apiToken, fetchApiData]);
 
     const organizePhotos = useCallback(async () => {
-      // SỬA LỖI: Lấy hàm phân tích từ state bằng cách gọi hàm bao bọc.
+      // SỬA LỖI TRIỆT ĐỂ: `imageAnalyzer` lưu một hàm `() => analyzeImage`.
+      // Ta cần gọi hàm đó để lấy ra hàm `analyzeImage` thực sự.
       const getAnalyzerFunc = imageAnalyzer;
-      const analyzerFunc = (typeof getAnalyzerFunc === 'function') ? getAnalyzerFunc() : null;
+      const analyzerFunc = typeof getAnalyzerFunc === 'function' ? getAnalyzerFunc() : null;
 
       if (typeof analyzerFunc !== 'function') {
           log('Lỗi: Bộ phân tích AI chưa sẵn sàng hoặc không phải là một hàm. Vui lòng đợi model tải xong rồi thử lại.', 'error');

@@ -233,8 +233,10 @@ function OrganizerView({
                 setModelsLoaded(true);
                 if (typeof onAnalyzerReady === 'function') {
                     console.log("[DEBUG] Model đã sẵn sàng. Gọi onAnalyzerReady.");
-                    // SỬA LỖI: Truyền trực tiếp hàm `analyzeImage` thay vì bọc nó.
-                    onAnalyzerReady(analyzeImage);
+                    // SỬA LỖI TRIỆT ĐỂ: Bọc hàm `analyzeImage` trong một hàm khác.
+                    // Điều này đảm bảo React sẽ LƯU TRỮ hàm, thay vì THỰC THI nó ngay lập tức
+                    // khi cập nhật state ở component cha.
+                    onAnalyzerReady(() => analyzeImage);
                 }
             } catch (error) {
                 console.error('--- LỖI CHI TIẾT KHI TẢI MODEL ---', error);
@@ -369,3 +371,4 @@ function OrganizerView({
 }
 
 export default OrganizerView;
+
