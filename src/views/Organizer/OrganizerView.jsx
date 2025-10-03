@@ -159,21 +159,24 @@ function OrganizerView({
             let hash = null;
             try {
             if (window.pHash && typeof window.pHash.hash === 'function') {
-                // pHash.hash nhận File/Blob (README dùng files[0]), nên truyền processedBlob thay vì Image element
-                const pHashResult = await window.pHash.hash(processedBlob);
+                // Convert Blob -> File vì pHash.hash chỉ nhận File
+                const fileForHash = new File(
+                [processedBlob],
+                (fileName ? fileName.replace(/\.[^/.]+$/, "") : "image") + ".jpg",
+                { type: processedBlob.type || "image/jpeg" }
+                );
+
+                const pHashResult = await window.pHash.hash(fileForHash);
 
                 // pHashResult có thể là object với toBinary()/toHex() hoặc property .value
                 if (pHashResult) {
                 if (typeof pHashResult.toBinary === 'function') {
                     hash = pHashResult.toBinary();       // ví dụ: "101010011..."
-                } else if (typeof pHashResult.toString === 'function' && typeof pHashResult === 'string') {
+                } else if (typeof pHashResult === 'string') {
                     hash = pHashResult;
                 } else if (pHashResult.value) {
                     hash = String(pHashResult.value);
-                } else if (typeof pHashResult === 'string') {
-                    hash = pHashResult;
                 } else {
-                    // fallback: convert object to string (ít khả thi)
                     hash = JSON.stringify(pHashResult);
                 }
                 }
@@ -191,6 +194,7 @@ function OrganizerView({
             console.error(`[analyzeImage] Không thể tạo hash cho file: ${fileName || ''}`);
             return { error: 'hash_generation_failed' };
             }
+
 
             console.log('[DEBUG] pHash result:', pHashResult);
 
