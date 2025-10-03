@@ -29,7 +29,6 @@ const rgbToHsv = (r, g, b) => {
     return { h: h * 360, s: s * 100, v: v * 100 };
 };
 
-// [CẬP NHẬT] Thêm debug và sửa lỗi cho hàm tải script
 const loadScript = (src, id) => {
     return new Promise((resolve, reject) => {
         if (document.getElementById(id)) {
@@ -41,15 +40,13 @@ const loadScript = (src, id) => {
         const script = document.createElement('script');
         script.src = src;
         script.id = id;
-        script.crossOrigin = "anonymous"; // Quan trọng để tải từ CDN, tránh lỗi CORS
+        script.crossOrigin = "anonymous";
         script.onload = () => {
             console.log(`[DEBUG] Tải thành công script: ${src}`);
             resolve();
         };
         script.onerror = (errorEvent) => {
-            // Ghi lại sự kiện lỗi chi tiết để debug
             console.error(`[DEBUG] Sự kiện lỗi khi tải script ${src}:`, errorEvent);
-            // Reject với một Error object rõ ràng hơn thay vì chỉ event
             reject(new Error(`Không thể tải được script: ${src}`)); 
         };
         document.body.appendChild(script);
@@ -76,7 +73,6 @@ function OrganizerView({
     const [modelsLoaded, setModelsLoaded] = useState(false);
     const [modelLoadingError, setModelLoadingError] = useState(null);
 
-    // --- LOGIC MỚI: TẢI MODEL VÀ CHUẨN BỊ BỘ PHÂN TÍCH ---
     useEffect(() => {
         const toGrayscale = (imageData) => {
             const grayData = new Uint8ClampedArray(imageData.width * imageData.height);
@@ -113,9 +109,28 @@ function OrganizerView({
         };
 
         const analyzeImage = async (imageBlob, fileName) => {
+            let processedBlob = imageBlob;
+            if (fileName.toLowerCase().endsWith('.heic') || imageBlob.type === 'image/heic') {
+                if (!window.heic2any) {
+                    console.error("Thư viện heic2any chưa được tải.");
+                    return { error: `Không thể xử lý file HEIC: ${fileName}` };
+                }
+                try {
+                    console.log(`[DEBUG] Đang chuyển đổi file HEIC: ${fileName}`);
+                    processedBlob = await window.heic2any({
+                        blob: imageBlob,
+                        toType: "image/jpeg",
+                        quality: 0.8,
+                    });
+                } catch (err) {
+                    console.error(`Lỗi chuyển đổi HEIC: ${err.message}`);
+                    return { error: `Không thể xử lý file HEIC: ${fileName}` };
+                }
+            }
+
             const img = new Image();
-            img.crossOrigin = "anonymous"; // Cần thiết cho việc đọc pixel ảnh từ nguồn khác
-            const url = URL.createObjectURL(imageBlob);
+            img.crossOrigin = "anonymous";
+            const url = URL.createObjectURL(processedBlob);
             await new Promise((resolve, reject) => {
                 img.onload = () => {
                     URL.revokeObjectURL(url);
@@ -142,7 +157,6 @@ function OrganizerView({
             const face = detections[0];
             const box = face.detection.box;
 
-            // [SỬA LỖI] Sử dụng thư viện phash-js, hoạt động trên đối tượng Image
             const hash = await window.pHash.get(img);
             
             const imageData = ctx.getImageData(0, 0, img.width, img.height).data;
@@ -191,22 +205,21 @@ function OrganizerView({
                 console.log("[DEBUG] Bắt đầu tải các thư viện AI...");
                 await Promise.all([
                     loadScript('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js', 'face-api-script'),
-                    // [SỬA LỖI] Thay thế bằng thư viện phash-js hoạt động trên trình duyệt
-                    loadScript('https://cdn.jsdelivr.net/npm/phash-js@0.3.0/dist/phash.min.js', 'phash-script')
+                    loadScript('https://cdn.jsdelivr.net/npm/phash-js@0.3.0/dist/phash.min.js', 'phash-script'),
+                    loadScript('https://unpkg.com/heic2any@0.0.4/dist/heic2any.min.js', 'heic2any-script')
                 ]);
                 
                 console.log("[DEBUG] Các thư viện đã tải xong, chờ khởi tạo global variable...");
                 await new Promise((resolve, reject) => {
                     let checks = 0;
                     const interval = setInterval(() => {
-                        // [SỬA LỖI] Thay đổi điều kiện kiểm tra sang window.pHash
-                        if (window.faceapi && window.pHash) {
+                        if (window.faceapi && window.pHash && window.heic2any) {
                             clearInterval(interval);
-                            console.log("[DEBUG] window.faceapi và window.pHash đã sẵn sàng.");
+                            console.log("[DEBUG] window.faceapi, window.pHash, và window.heic2any đã sẵn sàng.");
                             resolve();
                         }
                         checks++;
-                        if (checks > 100) { // Timeout after 10 seconds
+                        if (checks > 100) { 
                            clearInterval(interval);
                            reject(new Error("Tải thư viện AI thất bại (timeout)."));
                         }
@@ -223,7 +236,8 @@ function OrganizerView({
                 setModelsLoaded(true);
                 if (typeof onAnalyzerReady === 'function') {
                     console.log("[DEBUG] Model đã sẵn sàng. Gọi onAnalyzerReady.");
-                    onAnalyzerReady(() => analyzeImage);
+                    // SỬA LỖI: Truyền trực tiếp hàm `analyzeImage` thay vì bọc nó trong một hàm khác.
+                    onAnalyzerReady(analyzeImage);
                 }
             } catch (error) {
                 console.error('--- LỖI CHI TIẾT KHI TẢI MODEL ---');
@@ -342,7 +356,6 @@ function OrganizerView({
                     </div>
                 )}
 
-                {/* --- CẬP NHẬT TRẠNG THÁI CHO NGƯỜI DÙNG --- */}
                 {modelLoadingError && <p className="text-center text-sm text-red-600 mt-2 font-semibold">{modelLoadingError}</p>}
                 {!isAnalyzerReady && !modelLoadingError && isSignedIn && (
                     <p className="text-center text-sm text-yellow-600 mt-2 font-semibold animate-pulse">Đang tải model AI, vui lòng đợi...</p>

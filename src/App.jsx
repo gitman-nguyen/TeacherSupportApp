@@ -1,17 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
-// CÁC FILE CON: ĐÃ CẬP NHẬT ĐƯỜNG DẪN THEO CẤU TRÚC src/views/
-import LoginView from './views/Login/LoginView.jsx'; 
+// CÁC FILE CON
+import LoginView from './views/Login/LoginView.jsx';
 import SettingsView from './views/Settings/SettingsView.jsx';
 import ScheduleView from './views/Schedule/ScheduleView.jsx';
 import OrganizerView from './views/Organizer/OrganizerView.jsx';
-import AdminView from './views/Admin/AdminView.jsx'; 
+import AdminView from './views/Admin/AdminView.jsx';
 import PhotoGalleryView from './views/PhotoGallery/PhotoGalleryView.jsx';
 
-// Import các hàm và hằng số (src/utils/)
-// THAY ĐỔI 1: Xóa bỏ BACKEND_URL vì không còn cần thiết
-// import { BACKEND_URL } from './utils/constants.js'; 
-import { calculateHammingDistance } from './utils/helpers.js'; 
+// Import các hàm và hằng số
+import { calculateHammingDistance } from './utils/helpers.js';
 
 // --- Main App Component ---
 function App() {
@@ -43,6 +41,14 @@ function App() {
     setLogs(prev => [...prev, { message, type, time: now }]);
   }, []);
     
+  const handleLogout = useCallback(() => {
+      setCurrentUser(null);
+      setAccessToken(null);
+      localStorage.clear();
+      setView('schedule');
+      log('Đã đăng xuất.', 'info');
+  }, [log]);
+
   const handleAuthError = useCallback(() => {
     log('Lỗi xác thực Google Drive hoặc phiên đã hết hạn. Yêu cầu cấp quyền lại.', 'error');
     setAccessToken(null);
@@ -71,7 +77,6 @@ function App() {
     }
   }, [log]);
 
-  // THAY ĐỔI 2: Cập nhật hàm fetchApiData để sử dụng đường dẫn tương đối qua proxy
   const fetchApiData = useCallback(async (endpoint, method = 'GET', body = null, token = null) => {
     const headers = { 'Content-Type': 'application/json' };
     if (token) {
@@ -82,19 +87,20 @@ function App() {
         options.body = JSON.stringify(body);
     }
     
-    // URL giờ đây là một đường dẫn tương đối, bắt đầu bằng /api.
-    // Vite Dev Server sẽ bắt lấy request này và proxy nó đến backend.
     const url = `/api${endpoint}`;
     
     const response = await fetch(url, options);
     if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown server error' }));
-        throw new Error(errorData.error || `Request failed with status ${response.status}`);
+        if (response.status === 401) {
+            log('Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.', 'error');
+            handleLogout(); 
+        }
+        const errorData = await response.json().catch(() => ({ error: 'Lỗi không xác định từ server' }));
+        throw new Error(errorData.error || `Yêu cầu thất bại với mã trạng thái ${response.status}`);
     }
-    // Xử lý trường hợp response có thể không có body
     const text = await response.text();
     return text ? JSON.parse(text) : {};
-  }, []);
+  }, [log, handleLogout]);
 
   useEffect(() => {
     const fetchInitialSettings = async () => {
@@ -115,14 +121,17 @@ function App() {
     fetchInitialSettings();
   }, [log, fetchApiData]);
   
-  const saveDriveAccessToken = useCallback(async (token, apiToken) => {
+  const saveDriveAccessToken = useCallback(async (tokenData, apiToken) => {
       if (!apiToken) {
           log('Lỗi: Thiếu API Token để xác thực với backend.', 'error');
           return;
       }
       log('Đang lưu Access Token Drive vào hồ sơ người dùng...', 'info');
       try {
-          await fetchApiData('/save_drive_token', 'POST', { access_token: token }, apiToken);
+          await fetchApiData('/save_drive_token', 'POST', { 
+            access_token: tokenData.access_token,
+            refresh_token: tokenData.refresh_token 
+          }, apiToken);
           log('Lưu Access Token Drive thành công.', 'success');
       } catch (error) {
           log(`Lỗi lưu Access Token Drive: ${error.message}`, 'error');
@@ -150,7 +159,9 @@ function App() {
                 
                 setAccessToken(tokenResponse.access_token);
                 localStorage.setItem('accessToken', tokenResponse.access_token);
-                saveDriveAccessToken(tokenResponse.access_token, userApiToken);
+                
+                saveDriveAccessToken(tokenResponse, userApiToken);
+                
                 log('Đã có quyền truy cập Google Drive!', 'success');
             },
         });
@@ -205,6 +216,7 @@ function App() {
     };
   }, []);
 
+
   useEffect(() => { setOrigin(window.location.origin) }, []);
 
   useEffect(() => {
@@ -255,14 +267,6 @@ function App() {
         localStorage.clear();
     }
   }, [log, fetchApiData]);
-
-  const handleLogout = () => {
-      setCurrentUser(null);
-      setAccessToken(null);
-      localStorage.clear();
-      setView('schedule');
-      log('Đã đăng xuất.', 'info');
-  };
 
   const handleSettingsChange = (e) => {
       const { name, value } = e.target;
@@ -436,7 +440,9 @@ function App() {
           const destinationFolders = {};
           let processedHashes = [];
           let filesProcessed = 0;
-          const analyzerFunc = imageAnalyzer();
+          
+          // SỬA LỖI: Gán trực tiếp hàm phân tích (imageAnalyzer) thay vì gọi nó.
+          const analyzerFunc = imageAnalyzer;
   
           for (let i = 0; i < allFiles.length; i += concurrencyLevel) {
               const batch = allFiles.slice(i, i + concurrencyLevel);
@@ -662,7 +668,6 @@ function App() {
 
         <div className="main-content">
             {view === 'schedule' && <ScheduleView recurringSchedule={recurringSchedule} setRecurringSchedule={setRecurringSchedule} oneOffSchedule={oneOffSchedule} setOneOffSchedule={setOneOffSchedule} log={log} currentUser={currentUser}/>}
-            {/* THAY ĐỔI 3: Xóa bỏ backendUrl prop không còn cần thiết */}
             {view === 'gallery' && <PhotoGalleryView accessToken={accessToken} apiKey={settings?.api_key} sourceFolderId={settings?.source_folder_id} log={log} getVideoCreationTime={getVideoCreationTime} getDriveToken={getDriveAccessToken} onAuthError={handleAuthError} />}
             {view === 'organizer' && <OrganizerView {...organizerProps} />} 
             {currentUser.role === 'Admin' && view === 'settings' && <SettingsView {...settingsProps} />}
