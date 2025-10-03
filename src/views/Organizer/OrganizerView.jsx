@@ -154,7 +154,7 @@ function OrganizerView({
             const face = detections[0];
             const box = face.detection.box;
 
-            const hash = await window.pHash.get(img);
+            const hash = await window.pHash(img);
             
             const imageData = ctx.getImageData(0, 0, img.width, img.height).data;
             let totalLuminance = 0, totalSaturation = 0;
