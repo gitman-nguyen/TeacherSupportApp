@@ -8,31 +8,26 @@ import OrganizerView from './views/Organizer/OrganizerView.jsx';
 import AdminView from './views/Admin/AdminView.jsx';
 import PhotoGalleryView from './views/PhotoGallery/PhotoGalleryView.jsx';
 
-// Import components tối ưu
-import Header from './components/Header.jsx';
-import Navigation from './components/Navigation.jsx';
-import LoadingSpinner from './components/LoadingSpinner.jsx';
-
-// Import custom hooks
-import { useAuth } from './hooks/useAuth.js';
-import { useApi } from './hooks/useApi.js';
-import { useSettings } from './hooks/useSettings.js';
-import { useSchedules } from './hooks/useSchedules.js';
-import { useGoogleAuth } from './hooks/useGoogleAuth.js';
-import { useGoogleScript } from './hooks/useGoogleScript.js';
-import { useLogs } from './hooks/useLogs.js';
-
 // Import các hàm và hằng số
 import { calculateHammingDistance } from './utils/helpers.js';
 
 // --- Main App Component ---
 function App() {
   const [view, setView] = useState('schedule');
+  const [settings, setSettings] = useState({ client_id: '', api_key: '', source_folder_id: '' });
+  const [recurringSchedule, setRecurringSchedule] = useState([]);
+  const [oneOffSchedule, setOneOffSchedule] = useState([]);
+  
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isSettingsLoading, setIsSettingsLoading] = useState(true);
+  const [accessToken, setAccessToken] = useState(null); 
+
   const [timeField, setTimeField] = useState('exifTime');
   const [removeDuplicates, setRemoveDuplicates] = useState(true);
   const [similarityThreshold, setSimilarityThreshold] = useState(5);
   const [filterUnclearSubject, setFilterUnclearSubject] = useState(true);
   const [filterDarkFace, setFilterDarkFace] = useState(true);
+  const [logs, setLogs] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [origin, setOrigin] = useState('');
@@ -40,40 +35,196 @@ function App() {
   // imageAnalyzer WILL hold the actual analyzer function (imageBlob, fileName) => Promise<analysis>
   const [imageAnalyzer, setImageAnalyzer] = useState(null);
 
-  // Custom hooks
-  const { currentUser, setCurrentUser, accessToken, setAccessToken, handleLogout, handleAuthError, log } = useAuth();
-  const { fetchApiData } = useApi(log, handleLogout);
-  const { settings, setSettings, isSettingsLoading, handleSettingsChange, handleSaveSettings } = useSettings(fetchApiData, log);
-  const { recurringSchedule, setRecurringSchedule, oneOffSchedule, setOneOffSchedule } = useSchedules(currentUser, fetchApiData, log);
-  const { logs, logContainerRef, renderLog } = useLogs();
+  const logContainerRef = useRef(null);
+
+  const log = useCallback((message, type = 'info') => {
+    const now = new Date().toLocaleTimeString();
+    setLogs(prev => [...prev, { message, type, time: now }]);
+  }, []);
+    
+  const handleLogout = useCallback(() => {
+      setCurrentUser(null);
+      setAccessToken(null);
+      localStorage.clear();
+      setView('schedule');
+      log('Đã đăng xuất.', 'info');
+  }, [log]);
+
+  const handleAuthError = useCallback(() => {
+    log('Lỗi xác thực Google Drive hoặc phiên đã hết hạn. Yêu cầu cấp quyền lại.', 'error');
+    setAccessToken(null);
+    localStorage.removeItem('accessToken');
+  }, [log]);
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem('currentUser');
+    const storedToken = localStorage.getItem('apiToken');
+    const storedAccessToken = localStorage.getItem('accessToken');
+
+    if (storedUser && storedToken) {
+        try {
+            const user = JSON.parse(storedUser);
+            user.apiToken = storedToken; 
+            setCurrentUser(user);
+            log('Đã khôi phục phiên đăng nhập.', 'info');
+            if (storedAccessToken) {
+                setAccessToken(storedAccessToken);
+                log('Đã khôi phục quyền truy cập Google Drive.', 'info');
+            }
+        } catch (e) {
+            log('Lỗi khôi phục phiên, vui lòng đăng nhập lại.', 'error');
+            localStorage.clear();
+        }
+    }
+  }, [log]);
+
+  const fetchApiData = useCallback(async (endpoint, method = 'GET', body = null, token = null) => {
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) {
+        headers['x-access-token'] = token;
+    }
+    const options = { method, headers };
+    if (body) {
+        options.body = JSON.stringify(body);
+    }
+    
+    const url = `/api${endpoint}`;
+    
+    const response = await fetch(url, options);
+    if (!response.ok) {
+        if (response.status === 401) {
+            log('Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.', 'error');
+            handleLogout(); 
+        }
+        const errorData = await response.json().catch(() => ({ error: 'Lỗi không xác định từ server' }));
+        throw new Error(errorData.error || `Yêu cầu thất bại với mã trạng thái ${response.status}`);
+    }
+    const text = await response.text();
+    return text ? JSON.parse(text) : {};
+  }, [log, handleLogout]);
+
+  useEffect(() => {
+    const fetchInitialSettings = async () => {
+        try {
+            const settingsData = await fetchApiData('/settings');
+            setSettings({
+                client_id: settingsData.client_id || '',
+                api_key: settingsData.api_key || '',
+                source_folder_id: settingsData.source_folder_id || ''
+            });
+        } catch (error) {
+            log(`Lỗi tải cài đặt: ${error.message}`, 'error');
+            setSettings({ client_id: '', api_key: '', source_folder_id: '' });
+        } finally {
+            setIsSettingsLoading(false);
+        }
+    };
+    fetchInitialSettings();
+  }, [log, fetchApiData]);
   
-  // Load Google Script
-  useGoogleScript();
-
-  // Google Auth hook
-  const { getDriveAccessToken } = useGoogleAuth(settings, currentUser, accessToken, setAccessToken, saveDriveAccessToken, log);
-
-  // Save Drive Access Token function
   const saveDriveAccessToken = useCallback(async (tokenData, apiToken) => {
-    if (!apiToken) {
-        log('Lỗi: Thiếu API Token để xác thực với backend.', 'error');
-        return;
-    }
-    log('Đang lưu Access Token Drive vào hồ sơ người dùng...', 'info');
-    try {
-        await fetchApiData('/save_drive_token', 'POST', { 
-          access_token: tokenData.access_token,
-          refresh_token: tokenData.refresh_token 
-        }, apiToken);
-        log('Lưu Access Token Drive thành công.', 'success');
-    } catch (error) {
-        log(`Lỗi lưu Access Token Drive: ${error.message}`, 'error');
-    }
+      if (!apiToken) {
+          log('Lỗi: Thiếu API Token để xác thực với backend.', 'error');
+          return;
+      }
+      log('Đang lưu Access Token Drive vào hồ sơ người dùng...', 'info');
+      try {
+          await fetchApiData('/save_drive_token', 'POST', { 
+            access_token: tokenData.access_token,
+            refresh_token: tokenData.refresh_token 
+          }, apiToken);
+          log('Lưu Access Token Drive thành công.', 'success');
+      } catch (error) {
+          log(`Lỗi lưu Access Token Drive: ${error.message}`, 'error');
+      }
   }, [log, fetchApiData]);
 
-  useEffect(() => { 
-    setOrigin(window.location.origin) 
+  const requestDriveAccessToken = useCallback((userApiToken) => {
+    if (!settings?.client_id) {
+        log('Chưa có Client ID để kết nối Google Drive.', 'error');
+        return;
+    }
+    
+    log('Yêu cầu cấp quyền Google Drive...', 'info');
+    try {
+        const client = window.google.accounts.oauth2.initTokenClient({
+            client_id: settings.client_id,
+            scope: 'https://www.googleapis.com/auth/drive', 
+            callback: (tokenResponse) => {
+                if (tokenResponse.error) {
+                    log(`Lỗi lấy quyền truy cập Drive: ${tokenResponse.error}. Vui lòng thử lại.`, 'error');
+                    setAccessToken(null);
+                    localStorage.removeItem('accessToken');
+                    return;
+                }
+                
+                setAccessToken(tokenResponse.access_token);
+                localStorage.setItem('accessToken', tokenResponse.access_token);
+                
+                saveDriveAccessToken(tokenResponse, userApiToken);
+                
+                log('Đã có quyền truy cập Google Drive!', 'success');
+            },
+        });
+        
+        client.requestAccessToken({ prompt: 'consent' }); 
+
+    } catch (err) {
+        log(`Lỗi khởi tạo OAuth2 Client: ${err.message}`, 'error');
+    }
+  }, [settings?.client_id, log, saveDriveAccessToken]);
+
+
+  useEffect(() => {
+    if (currentUser) {
+        const fetchSchedules = async () => {
+            try {
+                const [recurringRes, oneOffRes] = await Promise.all([
+                    fetchApiData('/recurring-schedules', 'GET', null, currentUser.apiToken),
+                    fetchApiData('/one-off-schedules', 'GET', null, currentUser.apiToken)
+                ]);
+                setRecurringSchedule(recurringRes);
+                setOneOffSchedule(oneOffRes.sort((a, b) => new Date(a.date) - new Date(b.date)));
+                log('Tải dữ liệu lịch học thành công.', 'success');
+                
+            } catch (error) {
+                 log(`Lỗi tải lịch học: ${error.message}`, 'error');
+            }
+        };
+        fetchSchedules();
+        if (!accessToken && currentUser.role !== 'Admin') {
+            requestDriveAccessToken(currentUser.apiToken);
+        }
+    }
+  }, [currentUser, log, fetchApiData, accessToken, requestDriveAccessToken]);
+    
+  useEffect(() => {
+    const scriptId = 'google-gsi-script';
+    if (document.getElementById(scriptId)) return;
+
+    const script = document.createElement('script');
+    script.id = scriptId;
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    document.body.appendChild(script);
+    
+    return () => {
+        const scriptElement = document.getElementById(scriptId);
+        if (scriptElement && document.body.contains(scriptElement)) {
+            document.body.removeChild(scriptElement);
+        }
+    };
   }, []);
+
+
+  useEffect(() => { setOrigin(window.location.origin) }, []);
+
+  useEffect(() => {
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [logs]);
 
   const handleAdminLogin = useCallback(async (username, password) => {
     log('Đang đăng nhập Admin...', 'info');
@@ -118,6 +269,27 @@ function App() {
     }
   }, [log, fetchApiData]);
 
+  const handleSettingsChange = (e) => {
+      const { name, value } = e.target;
+      setSettings(prev => ({...prev, [name]: value}));
+  };
+
+  const handleSaveSettings = async () => {
+        try {
+            await fetchApiData('/settings', 'POST', settings, currentUser?.apiToken);
+            log('Lưu cài đặt thành công!', 'success');
+        } catch (error) {
+            log(`Lỗi lưu cài đặt: ${error.message}`, 'error');
+        }
+    };
+  
+  const getDriveAccessToken = useCallback(() => {
+    if (!settings?.client_id) {
+        log('Chưa có Client ID để kết nối Google Drive.', 'error');
+        return;
+    }
+    requestDriveAccessToken(currentUser?.apiToken);
+  }, [settings?.client_id, log, currentUser?.apiToken, requestDriveAccessToken]);
   
     const getVideoCreationTime = useCallback(async (fileId) => {
         const driveToken = accessToken; 
@@ -451,6 +623,16 @@ function App() {
 
     }, [settings.source_folder_id, log, accessToken, timeField, removeDuplicates, filterUnclearSubject, filterDarkFace, similarityThreshold, imageAnalyzer, recurringSchedule, oneOffSchedule, getVideoCreationTime, concurrencyLevel, settings?.api_key, currentUser?.apiToken, handleAuthError]); 
   
+  const renderLog = () => {
+    const colorMap = {
+      info: 'text-gray-300', success: 'text-green-400', error: 'text-red-400', warn: 'text-yellow-400',
+    };
+    return logs.map((log, index) => (
+      <p key={index} className={`font-mono text-sm ${colorMap[log.type] || 'text-gray-300'}`}>
+        <span className="text-gray-500">[{log.time}]</span> {log.message}
+      </p>
+    ));
+  };
   
   const organizerProps = {
     settings,
@@ -491,7 +673,7 @@ function App() {
   };
 
   if (isSettingsLoading) {
-      return <LoadingSpinner message="Đang tải cấu hình..." />;
+      return <div className="flex justify-center items-center h-screen text-xl">Đang tải cấu hình...</div>;
   }
   
   if (!currentUser) {
@@ -500,8 +682,29 @@ function App() {
 
   return (
     <div className="container mx-auto p-4 md:p-8 max-w-7xl">
-        <Header currentUser={currentUser} onLogout={handleLogout} />
-        <Navigation currentView={view} onViewChange={setView} currentUser={currentUser} />
+        <header className="bg-white p-4 rounded-lg shadow-md mb-8">
+            <div className="flex justify-between items-center">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900">Trình Sắp Xếp Ảnh Google Drive</h1>
+                    <p className="text-gray-600">Xin chào, {currentUser.name} ({currentUser.role})</p>
+                </div>
+                <button onClick={handleLogout} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg">
+                    Đăng xuất
+                </button>
+            </div>
+        </header>
+
+        <div className="flex justify-center border-b mb-8 space-x-2">
+            <button onClick={() => setView('schedule')} className={`py-2 px-4 text-lg font-semibold rounded-t-lg ${view === 'schedule' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>Lịch học</button>
+            <button onClick={() => setView('gallery')} className={`py-2 px-4 text-lg font-semibold rounded-t-lg ${view === 'gallery' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>Thư viện ảnh</button>
+            <button onClick={() => setView('organizer')} className={`py-2 px-4 text-lg font-semibold rounded-t-lg ${view === 'organizer' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>Sắp xếp</button>
+            {currentUser.role === 'Admin' && (
+                <>
+                    <button onClick={() => setView('settings')} className={`py-2 px-4 text-lg font-semibold rounded-t-lg ${view === 'settings' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>Cài đặt</button>
+                    <button onClick={() => setView('admin')} className={`py-2 px-4 text-lg font-semibold rounded-t-lg ${view === 'admin' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>Quản trị</button>
+                </>
+            )}
+        </div>
 
         <div className="main-content">
             {view === 'schedule' && <ScheduleView recurringSchedule={recurringSchedule} setRecurringSchedule={setRecurringSchedule} oneOffSchedule={oneOffSchedule} setOneOffSchedule={setOneOffSchedule} log={log} currentUser={currentUser}/>}

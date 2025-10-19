@@ -53,7 +53,7 @@ const loadScript = (src, id) => {
     });
 };
 
-const OrganizerView = React.memo(({ 
+function OrganizerView({ 
     settings,
     timeField, setTimeField,
     removeDuplicates, setRemoveDuplicates,
@@ -68,7 +68,7 @@ const OrganizerView = React.memo(({
     getDriveToken,
     onAnalyzerReady,
     isAnalyzerReady,
-}) => {
+}) {
     const canvasRef = useRef(null);
     const [modelsLoaded, setModelsLoaded] = useState(false);
     const [modelLoadingError, setModelLoadingError] = useState(null);
@@ -411,9 +411,7 @@ const OrganizerView = React.memo(({
           </div>
        </div>
     );
-});
-
-OrganizerView.displayName = 'OrganizerView';
+}
 
 export default OrganizerView;
 

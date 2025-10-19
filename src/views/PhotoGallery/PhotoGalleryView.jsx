@@ -218,7 +218,7 @@ function FullscreenViewer({ file, onClose, onPrev, onNext, accessToken }) {
 }
 
 // --- Gallery Item Component with Lazy Loading ---
-const GalleryItem = React.memo(({ file, onSelect, onOpen, isSelected }) => {
+function GalleryItem({ file, onSelect, onOpen, isSelected }) { // accessToken prop is removed
     const [thumbnailUrl, setThumbnailUrl] = useState('');
     const imgRef = useRef(null);
 
@@ -281,7 +281,7 @@ const GalleryItem = React.memo(({ file, onSelect, onOpen, isSelected }) => {
             </div>
         </div>
     );
-});
+}
 
 
 // --- Re-authentication Component ---
